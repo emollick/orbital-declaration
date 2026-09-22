@@ -24,7 +24,9 @@ function readHeaders(file) {
 const rules = readHeaders(path.join(root, 'netlify.toml'));
 
 http.createServer((req, res) => {
-  let p = decodeURIComponent(req.url.split('?')[0]);
+  // A malformed percent-encoding used to throw out of the whole server (the scan of 2026-09-22): answer 400.
+  let p;
+  try { p = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); return res.end('bad request'); }
   if (p.endsWith('/')) p += 'index.html';
   let file = path.join(root, p);
   if (!file.startsWith(root)) { res.writeHead(403); return res.end(); }

@@ -1806,3 +1806,56 @@ D 31 (13:08 UTC; decisions-check 265 checks, all green): the sweep check carries
 1s 10s and ch4 5s 10s join ch2 5s 30s and ch4 1s 0s, each entry recording the outcome it was measured at alongside
 its reason), so the check passes at 12 of 16 with 4 carried and fails on a fifth loss or on any carried seed that
 starts losing a different way.
+
+### Last scan (18:10 to 20:05 UTC 2026-09-22; Ethan: "do one last scan to make sure no errors or other major issues")
+
+The scan ran on the working tree after checking the 22 scripts and index.html byte-identical to the live site.
+Errors: a syntax pass over every script, tool and art source; a reference scan of every `OD.Module.member` (212
+references, three unresolved but guarded, one of them wrong: sim.comebacks read `OD.Engagement.T`, which never
+existed, for a floor whose fallback happened to equal the export; it reads `tuning` now); every check script and the
+harness on the tree and on a served copy with the hosting headers; a headless crawl of 114 screens at 1440×900 and
+390×844 with page errors, console errors, rejections, CSP violations and failed requests captured (none from the
+game; the crawler's own staged card and the file:// font preloads only); 18 playthroughs on a served copy (every
+chapter on the recommended pick, chapter 1 guided by its own hints, a two-hour four-a-side skirmish, three campaigns
+through fights, transfers, refits and purchases: no error of any kind, chapters 2 to 8 won). Major issues: one round
+of the six reviewers reading for blocking findings only (reports scratchpad/review/<lens>/scan-v13.md): 22 blocking
+findings, every one a number, a promise or a flow the sim contradicted, none a crash.
+
+Fixed (the thread, ui.js, sim.js, main.js, story.js, campaign.js, autopilot untouched): boarding priced from the two
+crews everywhere (OD.Sim.boardingPlan: 90 s against an equal fit crew, longer against a bigger one, thrown back past
+two to one; the crossing log says "1m 30s across", the tip, Help and chapter 2's prize hint say the rule); the
+story's named officers (Lt. Ruiz, Cmdr. Adeyemi, Capt. Oyelaran, Adm. Marr) replaced by the ship or station speaking,
+per the v13 principle; the hull view's radiator area (2 500 m², not 2.5 km²); the physics screen's flip time with a
+hurt drive (turnFactor on the attitude authority, display only) and its cause for lost thrust (dry tanks, out of the
+fight, wrecked drive, the drive's share, the crew's g limit, each named as itself); the Arrive row against a hull
+under thrust ("not while she burns this hard", "if she coasts"); chapter 1's textbook transfer credits the closing
+speed the ship starts with (2·sqrt(a·d + v²/2) − v plus the sideways speed, labelled flat space); chapter 1 ends when
+Long Meridian is lost ('reach' fails on a destroyed hull); a finger held on a hostile keeps range on a phone (Help
+promised it, chapter 2's hint now says it); chapter 4's opening hint in the order that works; the campaign map's
+route costs drawn clear of the nodes. Workers: crew (a destroyed hull's people settled once: "24 lost with the
+ship", crew-check 197); engagement (the interceptor's three masses on the physics screen); decisions (Opus worker D, eleven items, decisions-check 280 checks green, the seeded sweep 15 of 16 with one
+carried): the Why paragraph in plain sentences with no meta text and no clause the card already carries; the cripple
+card priced from boardingPlan (1m 30s for even crews, 6 min at 260 against 24, a boarding the decks would throw back
+never lit); chapter 1's burn card with no hostile reads "Hold this range · no burn · we hold at 3 247 km · JCV Long
+Meridian comes down in 1h 54m"; the withdraw card above half hull titles the armour clock ("Our armour lasts 2m 56s
+at this fire"), says "half of it gone" only below half, and is not raised at all above 80 % hull unless that clock
+is short; "Break off: she can match the burn" in place of "opening at 0 m/s"; the radiator trade's clear restores
+the panels and the auto flag and says so, and its stow forecast is priced at the burn (56 %, not 14 %); chapter 5's
+approach rung says "at 1.3 g she outruns us, and the range opens at 4 km/s" and promises no arrival; the jink card
+is not raised under 12 s to the rounds and its clause prices the dodge against the miss window ("the dodge moves
+59 m before they arrive, and a miss needs 140 m"); a break-off whose own clause prices the escape longer than the
+armour lasts is never lit (Press on lit, the text saying nothing opens the range); "one of hers is still shooting
+against nothing of ours". The sweep went from 12 of 16 to 15 of 16 on the way: ch2 5s 30s, ch4 1s 10s and ch4 5s
+10s now win; ch4 1s 0s stays carried (defeat at 679 s, the division committing to a rung only its fastest hull can
+stand on, from round 3). Barring the unpriced "this course never clears that" key as well lost ch4 1s 30s (the
+fallback went past the barred break-off onto cover four minutes away against a 90 s clock), so only a priced
+escape is barred and W5's label carries the rest.
+
+Carried, with the reason: the one sweep loss above; the player's Auto radiator mode runs no rule on a player hull (the automatic
+rule runs only under the computer's think; tried on a copy of the tree: the seeded sweep stayed at 12 of 16 but on a different four seeds, a change to every fight's first minutes that the last scan is not the place for; the trade's restore is fixed without it); the freighter can still be flown into Callisto when the
+home order comes more than half an hour after the rendezvous (measured: a first order 60 to 300 s late wins, a home
+order 5 to 30 min late wins); another hull's cards starve behind the flagship's in chapters 6 to 8 (the band prefers
+the selected ship); campaign experience is granted after an abandoned fight; three graphics notes (Jupiter unlabelled
+with Amalthea on it, a clamped threat label over the corner block at close zoom, the comms banner 5 px into the
+phone panel); the radiators card can open lowercase and the repair card capitalises mid-line. Chapter 2 with no card
+answered is lost by design (the approach and range cards do not settle: the player flies the ship).

@@ -33,6 +33,9 @@
     life: 300,            // s an unanswered question stays on the band before the moment has passed
     minLife: 35,          // s a card is left on the band before its own situation test can close it
     slugGrace: 90,        // s the jink question stays up after a volley lands, while the gun still bears
+    jinkRead: 12,         // s to the round under which the question cannot be read and flown: 10 s to read it, 2 s of burst
+    jinkBurst: 2,         // s of lateral thrust a dodge gets before it is coasting sideways
+    jinkLengths: 2,       // hull lengths of drift the sim scores a slug as a miss by
     planTtl: 6,           // s a look-ahead answer is reused for (the countdown still ticks)
     openPerShip: 2,       // open decisions one hull may carry at once
     collapseMax: 4,       // hulls one card may speak for
@@ -2812,9 +2815,8 @@
         // firing solution for everyone in the engagement, and the quiet only starts when it stops.
         detail: withNum(maybe(view, time(slow.burn)) + ' of burn, and they hold a solution while it lasts · then dark for ' +
           maybe(view, time(slow.coast)) + ' · ' + dv(slow.dv, !view.solution) + ' · ' + quiet +
-          (outrun ? ' · this coast never closes the range'
-            : (plan.fits ? ' · brake at ' + km(brakeAt) + ', alongside at ' + km(hold) : ' · settling at ' + km(standoff)) +
-              ' in ' + maybe(view, time(slow.t))),
+          (plan.fits ? ' · brake at ' + km(brakeAt) + ', alongside at ' + km(hold) : ' · settling at ' + km(standoff)) +
+          (outrun ? ' · this coast never closes the range' : ' in ' + maybe(view, time(slow.t))),
           kmSay(view, gap) + ' to cover'),
         recommended: !rush && saving >= T.minBenefit,
         benefit: saving,
@@ -3772,8 +3774,12 @@
           (decks && decks.beaten
             ? ' · her ' + decks.theirs + ' fit crew against ' + V.say('our ', V.name + '\u2019s ') + decks.ours +
               ' throws the party back'
-            : swarmed ? ' · ' + count(theirs) + ' of hers are still shooting against ' + count(ours) +
-              V.say(' of ours, and we sit still for all of it', ' of ' + V.name + '\u2019s, and she sits still for all of it')
+            : swarmed ? ' · ' + count(theirs) + ' of hers ' + (theirs === 1 ? 'is' : 'are') + ' still shooting against ' +
+              (ours === 0
+                ? V.say('nothing of ours, and we sit still for all of it',
+                  'nothing of ' + V.name + '\u2019s, and she sits still for all of it')
+                : count(ours) + V.say(' of ours, and we sit still for all of it',
+                  ' of ' + V.name + '\u2019s, and she sits still for all of it'))
               : !inTime ? ' · ' + maybe(view, time(run)) + ' of it with ' + count(theirs) + ' of hers still shooting' : ''),
           rangeSay(view) + ' to her'),
         noRec: swarmed || !inTime || !!(decks && decks.beaten),
@@ -3881,7 +3887,12 @@
   }
   function trigSlugs(sim, ship) {
     if (ship.jink) return null;
-    const s = slugsOn(sim, ship);
+    const s0 = slugsOn(sim, ship);
+    // F1: 'JCS Anselm is 3 s from one round. Have her jink?' — and a log line at 0 s. A volley that
+    // lands before the question can be read and the burst flown is not a question: the dodge is
+    // sized from the flight time left, and at three seconds it moves her metres. The gun that
+    // threw it is still a question, so the card falls back on the gunner.
+    const s = s0.n && s0.eta < T.jinkRead ? { n: 0, eta: null, fromId: s0.fromId } : s0;
     const gunner = s.n ? null : slugGunner(sim, ship);
     if (!s.n && !gunner) return null;
     const from = s.n ? (s.fromId ? sim.byId(s.fromId) : null) : gunner;
@@ -3955,6 +3966,18 @@
     // those is true of this hull: a freighter holding still is holding still, and nothing else.
     const boarding = !!ship.heldFireForBoarding;
     const noseOn = !!(from && facetOf(from, ship) === 'nose');
+    // What a dodge actually moves her before the rounds arrive. The overlay burns sideways at 70 %
+    // of the drive for about two seconds and then keeps the speed it bought, and the sim scores a
+    // slug as a miss once it is two hull lengths off. Under that, the rounds pass through her.
+    const window = T.jinkLengths * Math.max(20, ship.length || 100);
+    const drift = (() => {
+      const a = 0.7 * ship.accel();
+      const secs = inFlight && s.eta > 0 ? s.eta : null;
+      if (!(a > 0) || secs == null) return null;
+      const tb = Math.min(T.jinkBurst, secs);
+      return 0.5 * a * tb * tb + a * tb * Math.max(0, secs - tb);
+    })();
+    const clears = drift == null || drift >= window;
     const keeps = boarding && noseOn ? 'the boarding match and the nose-on aim hold'
       : boarding ? 'the boarding match holds'
         : noseOn ? 'the nose-on aim holds' : 'nothing else changes';
@@ -3965,8 +3988,11 @@
         detail: dv(cost) + ' a dodge · ' + (inFlight
           ? s.n + ' in flight, first in ' + time(s.eta)
           : (from ? from.name + '’s' : 'her') + ' coilgun bears on ' + V.us + ' out to ' + km(reach)) +
-          ' · they pass through empty space',
-        recommended: true,
+          (clears ? ' · they pass through empty space'
+            : ' · the dodge moves ' + Math.round(drift) + ' m before they arrive, and a miss needs ' +
+              Math.round(window) + ' m'),
+        recommended: clears,
+        noRec: !clears,
         act: () => { ship.jink = true; },
       },
       {
@@ -4829,6 +4855,20 @@
       build: buildWithdraw,
     };
   }
+  // F3: the card lit 'Break off and open' beside its own clause 'clearing that takes 4h 59m \u00b7 the
+  // armour lasts 51 s'. Where neither the burn nor the sister gets her out before the armour
+  // goes, the card says so in its own sentence instead of pointing at a key that does not work.
+  // The sentence is put on the card's text source, so every refresh keeps it.
+  function noteNoWayOut(d, none) {
+    if (d._noWayOut === none) return;
+    d._noWayOut = none;
+    if (d._textBase === undefined) d._textBase = d._text;
+    const base = d._textBase;
+    d._text = !none ? base : (sm, sh, third) => {
+      const said = typeof base === 'function' ? (base(sm, sh, third) || '') : String(base || '');
+      return said + ' Nothing on this card opens the range before the armour goes.';
+    };
+  }
   function buildWithdraw(sim, d, ship, target) {
     const V = voiceOf(ship, d.third);
     const herObj = foeHer(V, target);
@@ -4896,6 +4936,12 @@
     const runsTail = bite > 0 && clear != null && clear > 0 && tailCm > 0 && noseCm > tailCm;
     const horizon = life != null ? Math.min(life, T.coverHorizon * (runsTail ? 1 : 3)) : T.coverHorizon;
     const covers = clear != null && clear <= horizon;
+    // F3: an escape the card itself prices longer than the armour clock is not an escape. The
+    // test is a priced one: 'clearing that takes 21m 59s' beside 'the armour lasts 2m 57s' reads
+    // as a way out and is not one. A course that never clears her reach at all is a different
+    // clause and an honest one — the key says the range will not open, or that the burn buys
+    // distance and stays inside her beams, and chapter 4 is won on exactly that burn at 343 s.
+    const escapeSlow = bite > 0 && life != null && clear != null && clear > life;
     const toSis = sis ? U.dist(ship.pos, sis.pos) : Infinity;
     // 'Near' is a time, not a distance: getting behind her is worth recommending when we can be
     // there before the burn would have cleared the bite, and when she can take the next one.
@@ -4962,8 +5008,11 @@
       // With the armour running out, a burn that only buys distance is still the answer: it is the
       // one key on the card that takes hull out of the fire. Unless the fire is interceptors, which
       // come with it.
-      noRec: opensNothing || (!covers && !dying) || (dartLed && !covers),
-      recommended: !opensNothing && !won && (covers || (dying && !sisNear && !dartLed)) && behind,
+      noRec: escapeSlow || opensNothing || (!covers && !dying) || (dartLed && !covers),
+      // F3: an escape slower than the armour does not do what the key says, so it is not the
+      // band's answer even when everything else on the card is quiet.
+      never: escapeSlow,
+      recommended: !escapeSlow && !opensNothing && !won && (covers || (dying && !sisNear && !dartLed)) && behind,
       act: (s) => startBreak(s, ship, target || null, bo.secs, true),
     });
     if (sis) {
@@ -4979,11 +5028,15 @@
             ' · ' + km(toSis) + ' to her, under the drive the whole way · ' +
             V.say('she is at ', sis.name + ' is at ') + pct(sis.hull) + ' of hull',
         noRec: !inTime,
-        recommended: !won && !covers && inTime && (sisNear || dartLed) && (behind || dying),
+        // F3: where the burn cannot outrun the armour clock, cover is the one thing left that can.
+        recommended: !won && inTime && ((!covers && (sisNear || dartLed) && (behind || dying)) || escapeSlow),
         burns: true,
         act: (s) => s.setOrder(ship.id, { type: 'intercept', target: sis.id, range: T.screenRange }),
       });
     }
+    // F3: neither way out does what its key says — the burn is priced slower than the armour and
+    // the sister is farther off than the clock. The card says so rather than lighting one of them.
+    const stuck = escapeSlow && !inTime;
     // What staying in it costs. 'Ours against hers' is two hulls' worth of arithmetic on a card
     // that three hostiles are shooting at, so where more than one of them can reach us the clause
     // counts them instead of comparing one.
@@ -5010,6 +5063,9 @@
       quiet: true,
       act: () => { /* the orders stand: the choice is to stay in it */ },
     });
+    // F3: the burn is slower than the armour and the sister is too far. Nothing here gets her out,
+    // and the card says that rather than lighting a key that reads as though something does.
+    noteNoWayOut(d, stuck);
     return list;
   }
 

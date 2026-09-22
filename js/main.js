@@ -504,7 +504,10 @@
         { k: 'Prizes taken', v: String(prizes), n: prizes, f: (x) => String(Math.round(x)) },
       ];
       // the crew (v13): wounded and lost across our hulls, only when there were any
-      { const w = own.reduce((a, s) => a + (s.crew ? Math.round(s.crew.wounded || 0) : 0), 0), l = own.reduce((a, s) => a + (s.crew ? Math.round(s.crew.lost || 0) : 0), 0);
+      // read through the crew module's record, which settles a destroyed hull's people even when the fight ended
+      // on the frame she was lost (the scan of 2026-09-22 saw "6 wounded, 4 lost" once for two hulls lost with 48 aboard)
+      const crewOf = (s) => (s.crew && OD.Crew && typeof OD.Crew.toRecord === 'function' ? OD.Crew.toRecord(s) : s.crew) || null;
+      { const w = own.reduce((a, s) => { const c = crewOf(s); return a + (c ? Math.round(c.wounded || 0) : 0); }, 0), l = own.reduce((a, s) => { const c = crewOf(s); return a + (c ? Math.round(c.lost || 0) : 0); }, 0);
         if (w + l > 0) stats.push({ k: 'Crew', v: [w > 0 ? w + ' wounded' : '', l > 0 ? l + ' lost' : ''].filter(Boolean).join(', '), n: w + l, f: (x) => String(Math.round(x)) }); }
       if (ctx.idealDv && ctx.firstDv != null) stats.push({ k: 'First transfer', v: U.fmt.dv(ctx.firstDv) + ' · textbook ' + U.fmt.dv(ctx.idealDv) + ' in flat space' });
       // one line per player ship from the damage module: the parts that are not sound
@@ -513,7 +516,7 @@
         if (OD.Damage && typeof OD.Damage.report === 'function') { try { bad = (OD.Damage.report(s) || []).filter((r) => r.state !== 'ok'); } catch (e) { bad = []; } }
         const parts = bad.slice(0, 3).map((r) => r.name + ' ' + r.state).join(' · ') + (bad.length > 3 ? ' · ' + (bad.length - 3) + ' more' : '');
         // the people (v13): wounded and lost this fight, from the crew record
-        const c = s.crew, people = c && (c.wounded > 0 || c.lost > 0) ? ' · ' + [c.wounded > 0 ? Math.round(c.wounded) + ' wounded' : '', c.lost > 0 ? Math.round(c.lost) + ' lost' : ''].filter(Boolean).join(', ') : '';
+        const c = crewOf(s), people = c && (c.wounded > 0 || c.lost > 0) ? ' · ' + [c.wounded > 0 ? Math.round(c.wounded) + ' wounded' : '', c.lost > 0 ? Math.round(c.lost) + ' lost' : ''].filter(Boolean).join(', ') : '';
         const text = s.destroyed ? 'lost' : (s.captured ? 'taken by a boarding party' : (parts || (s.hull < 0.995 ? 'armour and hull only' : 'no damage')) + ' · hull ' + Math.round(s.hull * 100) + ' %' + people);
         return { name: s.name, text, hurt: bad.length > 0 || s.hull < 0.999 || !!people, lost: s.destroyed || s.captured };
       });

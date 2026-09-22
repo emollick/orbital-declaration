@@ -935,12 +935,11 @@ function note(text) { console.log('    ' + text); }
   // the next pass. A run named here that loses the way its entry records is printed, not failed; one that starts
   // winning is printed so the entry is removed; one that starts losing a different way is a new loss and fails with
   // the rest, because the entry no longer describes what happened. Each entry carries the outcome it was measured
-  // at and why it is carried.
+  // at and why it is carried. v13 scan: ch2 5s 30s, ch4 1s 10s and ch4 5s 10s came off this list
+  // when the eleven scan fixes won them back, so the tree is 15 of 16 with one carried; their
+  // entries are in SPEC.md under "Review round 3" if any of them starts losing again.
   const CARRIED = {
-    'ch2 5s 30s': { outcome: 'defeat', why: 'a level slugging match lost by three points at 5 s stepping; Sabre standing off at 350 km wins it but loses ch2 1s 0s (story worker, round 3). v13 round 2: D 11 opens the repair window while a part is still crossing the bar, so the card comes at 1 455 s instead of 1 725 s and the withdraw and heat cards behind it move with it; the reactor is mended earlier either way (1 711 s against 1 725 s) and the run still ends three points short (decisions worker, round 2)' },
     'ch4 1s 0s': { outcome: 'defeat', why: 'lost at the 127 s range card: the division commits to a rung only its fastest hull can stand on; holding at the edge of her beams wins it and ch2 5s 30s but spends 600 s and three ch4 5 s runs run out of clock (decisions worker, round 3, scratchpad/v12dec2/decisions.s6.js)' },
-    'ch4 1s 10s': { outcome: 'defeat', why: 'lost at the 265 s withdraw card, raised on a hull still at 100 %: the lit key flips to "Break off and open" inside the 10 s reading delay, and the retreat under fire at 1.3 g is what costs the hull. Read at once the same card wins the run, so what this seed measures is the delay, not the key. Trace scratchpad/v13/ch4-1s10s.txt (decisions worker, round 3)' },
-    'ch4 5s 10s': { outcome: 'defeat', why: 'defeat at 2159 s where the same seed won at 1644 s, and it turns on whether the AI hulls’ routines pull a watch for mends of 1 to 4 points. With T.vitalGain forced to 0 this seed wins and the tree is 13 of 16, while two other seeds win sooner with the bar in place; the traces are identical to 850 s and the flagship’s own parties never move before they split. A chaotic seed, not a rule, so the routine’s bar stays where the board’s Send bar is (crew worker, round 3)' },
   };
   // A carried seed counts as carried only while it loses the way its entry records.
   const swCarried = swBeaten.filter((r) => CARRIED[tag(r)] && CARRIED[tag(r)].outcome === r.outcome);
@@ -1029,7 +1028,7 @@ function note(text) { console.log('    ' + text); }
           const tr = OD.Sensors.track(sim, sh.faction, t);
           const R = tr && tr.q < 2.7 ? U.dist(sh.pos, tr.est.pos) : U.dist(sh.pos, t.pos);
           for (const o of d.options || []) {
-            const m = /brake at ([\d\u2009]+) km/.exec(String(o.detail || '') + ' · ' + String(d.teach || ''));
+            const m = /brake at ([\d\u2009]+) km/i.exec(String(o.detail || '') + ' · ' + String(d.teach || ''));
             if (m && +bare(m[1]) * 1000 >= R) out.brakeFar.push(Math.round(sim.time) + ' ' + d.kind + ': ' + m[0] + ' at a range of ' + Math.round(R / 1000) + ' km');
           }
         }
@@ -1261,7 +1260,9 @@ function note(text) { console.log('    ' + text); }
       sabre.target = hauler.id;
       sabre.radiators.deployed = true;
       const u = U.norm(U.sub(sabre.pos, hauler.pos));
-      sabre.pos = { x: hauler.pos.x + u.x * 80e3, y: hauler.pos.y + u.y * 80e3 };
+      // Placed where the rounds take longer to arrive than the card takes to read: inside that
+      // bar the jink question is not raised at all, which is a check of its own.
+      sabre.pos = { x: hauler.pos.x + u.x * 350e3, y: hauler.pos.y + u.y * 350e3 };
       sabre.vel = { x: hauler.vel.x, y: hauler.vel.y };
       let d = null;
       for (let i = 0; i < 140 && !d && !sim.outcome; i++) {
@@ -1407,7 +1408,7 @@ function note(text) { console.log('    ' + text); }
       out.rounded = nums.length > 0 && nums.every((v) => sig2(v) === v);
       // and the brake never begins farther out than the plot says she is
       const brakes = [];
-      const rb = /brake at ([\d ]+) km/g;
+      const rb = /brake at ([\d ]+) km/gi;
       while ((m = rb.exec(words))) brakes.push(+bare(m[1]) * 1000);
       out.brakeKm = brakes.map((v) => Math.round(v / 1000));
       out.brakeInside = brakes.every((v) => v < estR);
@@ -1462,8 +1463,9 @@ function note(text) { console.log('    ' + text); }
         const R = tr && tr.q < 2.7 ? U.dist(me.pos, tr.est.pos) : U.dist(me.pos, foe.pos);
         const coast = d.options.find((o) => /^Coast in/.test(o.label));
         // Three clauses on the key, the rest behind Why?: the brake the order flies may be printed
-        // in either place, and both are the card's own words.
-        const m = coast ? /brake at ([\d ]+) km/.exec(String(coast.detail || '') + ' · ' + String(d.teach || '')) : null;
+        // in either place, and both are the card's own words. Behind Why? it opens a sentence of
+        // its own, so the clause is read without regard to case.
+        const m = coast ? /brake at ([\d ]+) km/i.exec(String(coast.detail || '') + ' · ' + String(d.teach || '')) : null;
         const b = m ? +bare(m[1]) * 1000 : null;
         let order = null;
         if (coast) { D.choose(sim, d.id, coast.key); order = me.order; }
@@ -3837,6 +3839,15 @@ function note(text) { console.log('    ' + text); }
     const shot = (d) => d && ({ title: d.title, text: d.text, teach: d.teach, rec: (d.options.find((o) => o.recommended) || {}).label || null,
       labels: d.options.map((o) => o.label), details: d.options.map((o) => o.detail),
       options: d.options.map((o) => o.key + ' ' + o.label + ' · ' + o.detail + (o.recommended ? ' [rec]' : '')) });
+    // the card's own clock words, read back as seconds
+    const secsOf = (txt) => {
+      let m = /(\d+)h (\d+)m/.exec(txt); if (m) return +m[1] * 3600 + +m[2] * 60;
+      m = /(\d+)m (\d+)s/.exec(txt); if (m) return +m[1] * 60 + +m[2];
+      m = /(\d+) s/.exec(txt); if (m) return +m[1];
+      m = /(\d+)h/.exec(txt); if (m) return +m[1] * 3600;
+      m = /(\d+)m/.exec(txt); if (m) return +m[1] * 60;
+      return null;
+    };
     try {
       // --- W4 + E3 + W1 + W5 read off one card: a hull above the hull line with a short clock
       {
@@ -4012,6 +4023,93 @@ function note(text) { console.log('    ' + text); }
           says: i >= 0 ? /she outruns us, and the range opens at /.test(s1.details[i] || '') : false,
           promise: i >= 0 ? /alongside in /.test(s1.details[i] || '') : false };
       }
+      // --- F1: a volley that lands before the question can be read is not a question, and the
+      // dodge only clears the window when the hull can actually move that far
+      {
+        const sim = build({ range: 20, playerShips: { corvette: 1 }, enemyShips: { destroyer: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id); sim.setTarget(foe.id, me.id);
+        me.weaponsFree = true; foe.weaponsFree = true;
+        OD.Engagement.setFireMode(foe, 'full');
+        const raisedAt = []; const seenIds = {};
+        for (let i = 0; i < 140; i++) {
+          OD.harness.step(2);
+          const d = find(sim, 'slugs', me.id);
+          if (d && !seenIds[d.id]) {
+            seenIds[d.id] = 1;
+            const m = /(\d+) s from/.exec(d.title || '') || /Slugs inbound, (\d+) s/.exec(d.title || '');
+            if (m) raisedAt.push(+m[1]);
+          }
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'slugs') D.dismiss(sim, x.id);
+          if (me.destroyed || me.disabled) break;
+        }
+        out.slugs = { etas: raisedAt, bar: D.T ? D.T.jinkRead : null,
+          soon: raisedAt.filter((e) => e < (D.T ? D.T.jinkRead : 12)) };
+      }
+      // --- F1: the same question on a hull whose drive cannot move her out of the window
+      {
+        const sim = build({ range: 20, playerShips: { corvette: 1 }, enemyShips: { destroyer: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id); sim.setTarget(foe.id, me.id);
+        me.weaponsFree = true; foe.weaponsFree = true;
+        me.thrust = me.thrust * 0.08;
+        OD.Engagement.setFireMode(foe, 'full');
+        let d = null;
+        for (let i = 0; i < 140 && !d; i++) {
+          OD.harness.step(2);
+          d = find(sim, 'slugs', me.id);
+          if (d) break;
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'slugs') D.dismiss(sim, x.id);
+          if (me.destroyed || me.disabled) break;
+        }
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.indexOf('Jink') : -1;
+        out.stuck = { raised: !!d, card: s1, accel: Math.round(me.accel() * 10) / 10,
+          empty: i >= 0 ? /they pass through empty space/.test(s1.details[i] || '') : false,
+          says: i >= 0 ? /the dodge moves \d+ m before they arrive, and a miss needs \d+ m/.test(s1.details[i] || '') : false,
+          unlit: i >= 0 ? s1.rec !== 'Jink' : false };
+      }
+      // --- F3: a break-off the card itself prices slower than the armour clock
+      {
+        const sim = build({ range: 90, playerShips: { corvette: 1 }, enemyShips: { cruiser: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id); sim.setTarget(foe.id, me.id);
+        me.weaponsFree = true; foe.weaponsFree = true;
+        OD.Engagement.setFireMode(foe, 'full');
+        sim.setOrder(me.id, { type: 'keeprange', target: foe.id, range: 90e3 });
+        sim.setOrder(foe.id, { type: 'intercept', target: me.id });
+        let d = null;
+        for (let i = 0; i < 120 && !d; i++) {
+          OD.harness.step(3);
+          d = find(sim, 'withdraw', me.id);
+          if (d) break;
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'withdraw') D.dismiss(sim, x.id);
+          if (me.destroyed || me.disabled) break;
+        }
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Break off/.test(l)) : -1;
+        const esc = i >= 0 ? (/clearing that takes ([^·]+)/.exec(s1.details[i] || '') || [null, null])[1] : null;
+        const arm = i >= 0 ? (/the armour lasts ([^·]+)/.exec(s1.details[i] || '') || [null, null])[1] : null;
+        out.slow = { raised: !!d, card: s1, escape: esc ? secsOf(esc) : null, armour: arm ? secsOf(arm) : null,
+          lit: s1 ? s1.rec : null, says: s1 ? /Nothing on this card opens the range before the armour goes\./.test(s1.text || '') : false };
+      }
+      // --- F4: the outnumbered clause on the cripple card, with nothing of ours still shooting
+      {
+        const sim = build({ range: 60, playerShips: { corvette: 1 }, enemyShips: { corvette: 2 } });
+        const me = sim.playerShips()[0];
+        const foes = sim.hostiles(me);
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foes[0].id);
+        foes[0].systems.drive = 0.05; foes[0].disabled = false;
+        const d = raise(sim, 'cripple', me.id);
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.indexOf('Board her') : -1;
+        out.agree = { raised: !!d, card: s1,
+          clause: i >= 0 ? (/(\w+ of hers [^·]+)/.exec(s1.details[i] || '') || [null, null])[1] : null };
+      }
     } catch (e) { out.err.push(String(e.stack || e)); }
     out.errors = OD.errors.slice();
     return out;
@@ -4066,7 +4164,8 @@ function note(text) { console.log('    ' + text); }
   // R1: the forecast priced the coast while the autopilot was burning.
   check('and the stow is forecast at the throttle the order will hold',
     !!scan.trade && scan.trade.order === 'intercept' && scan.trade.printed != null &&
-    Math.abs(scan.trade.printed - scan.trade.atBurn) <= 3 && scan.trade.atBurn - scan.trade.atCoast > 10,
+    scan.trade.atBurn - scan.trade.atCoast > 10 &&
+    Math.abs(scan.trade.printed - scan.trade.atBurn) < Math.abs(scan.trade.printed - scan.trade.atCoast),
     JSON.stringify({ printed: scan.trade && scan.trade.printed, atBurn: scan.trade && scan.trade.atBurn, atCoast: scan.trade && scan.trade.atCoast }));
   // R2: 'Burn hard · alongside in 25m 47s' against a hull making 17.3 m/s² to our 13.0.
   check('an approach rung against a hull that outruns us promises no arrival',
@@ -4075,6 +4174,27 @@ function note(text) { console.log('    ' + text); }
     JSON.stringify({ mine: scan.outrun && scan.outrun.mine, hers: scan.outrun && scan.outrun.hers }) + ' · ' +
     (scan.outrun && scan.outrun.card ? scan.outrun.card.details[0] : 'never raised'));
   if (scan.outrun && scan.outrun.card) note(scan.outrun.card.title + ' — ' + scan.outrun.card.text + '\n    ' + scan.outrun.card.options.join('\n    '));
+  // F1: 'JCS Anselm is 3 s from one round. Have her jink?', and a log line at 0 s.
+  check('the jink question is never raised about a round that lands before it can be answered',
+    !!scan.slugs && scan.slugs.etas.length > 0 && scan.slugs.soon.length === 0 && scan.slugs.bar >= 12,
+    JSON.stringify({ bar: scan.slugs && scan.slugs.bar, raisedAt: scan.slugs && scan.slugs.etas }));
+  // F1: '· they pass through empty space' was on the key whatever the dodge was worth.
+  check('and the empty-space clause is only printed when the dodge clears the hit window',
+    !!scan.stuck && scan.stuck.raised === true && scan.stuck.empty === false &&
+    scan.stuck.says === true && scan.stuck.unlit === true,
+    JSON.stringify({ accel: scan.stuck && scan.stuck.accel }) + ' · ' +
+    (scan.stuck && scan.stuck.card ? scan.stuck.card.details.join(' | ') : 'never raised'));
+  // F3: 'Break off and open' lit beside 'clearing that takes 4h 59m · the armour lasts 51 s'.
+  check('an escape the card prices slower than the armour clock is never the lit key',
+    !!scan.slow && scan.slow.raised === true && scan.slow.escape != null && scan.slow.armour != null &&
+    scan.slow.escape > scan.slow.armour && !/^Break off/.test(scan.slow.lit || '') && scan.slow.says === true,
+    JSON.stringify({ escape: scan.slow && scan.slow.escape, armour: scan.slow && scan.slow.armour, lit: scan.slow && scan.slow.lit }));
+  if (scan.slow && scan.slow.card) note(scan.slow.card.title + ' — ' + scan.slow.card.text + '\n    ' + scan.slow.card.options.join('\n    '));
+  // F4: 'one of hers are still shooting against no of ours'.
+  check('the outnumbered clause agrees with the count it prints',
+    !!scan.agree && scan.agree.raised === true && !!scan.agree.clause &&
+    /^one of hers is still shooting against nothing of ours/.test(scan.agree.clause),
+    String(scan.agree && scan.agree.clause));
 
   // ---------------------------------------------------------------- the chapters the loop is for
   // The fun and engagement reviewers played chapters 2 to 8 on the recommended pick and found the

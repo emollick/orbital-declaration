@@ -12,7 +12,7 @@
     { id: 'ganymede', name: 'Ganymede · Galileo Regio Yards', kind: 'yard', body: 'ganymede', x: 0.72, y: 0.30, owner: 'JC', desc: 'The Compact\'s shipyards. New hulls are commissioned here.' },
     { id: 'europa', name: 'Europa · Conamara Station', kind: 'station', body: 'europa', x: 0.42, y: 0.20, owner: 'JC', desc: 'Ice farm and refuelling stop. Two 20 MW station lasers defend it.' },
     { id: 'io', name: 'Io · Loki Foundry', kind: 'base', body: 'io', x: 0.30, y: 0.62, owner: 'ISA', desc: 'The Authority\'s foothold. Hold Io and Amalthea together and the war is won.' },
-    { id: 'amalthea', name: 'Amalthea · Forward Anchorage', kind: 'base', body: 'jupiter', x: 0.47, y: 0.50, owner: 'ISA', desc: 'Authority forward base in low Jupiter orbit. Hold it and Io together and the war is won.' },
+    { id: 'amalthea', name: 'Amalthea · Forward Anchorage', kind: 'base', body: 'jupiter', x: 0.55, y: 0.50, owner: 'ISA', desc: 'Authority forward base in low Jupiter orbit. Hold it and Io together and the war is won.' },
     { id: 'thebe', name: 'Thebe Yards', kind: 'yard', body: 'jupiter', x: 0.56, y: 0.66, owner: 'ISA', desc: 'A Compact yard the Authority took. Retake it for a second slipway and 22 requisition a turn.' },
     { id: 'metis', name: 'Metis Ring Refinery', kind: 'depot', body: 'jupiter', x: 0.40, y: 0.36, owner: 'none', desc: 'Propellant mined from Jupiter\'s ring. Whoever holds it refuels here and earns 6 requisition a turn.' },
     { id: 'anvil', name: 'Anvil High Station', kind: 'station', body: 'jupiter', x: 0.58, y: 0.14, owner: 'none', desc: 'Neutral station in high Jupiter orbit. It pays 12 requisition a turn to whoever takes it.' },
@@ -228,6 +228,8 @@
     g.addColorStop(0, '#e2c39a'); g.addColorStop(0.6, '#c9a37a'); g.addColorStop(1, '#5a4330');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(jx, jy, 46, 0, U.TAU); ctx.fill();
     ctx.strokeStyle = 'rgba(201,163,122,0.15)'; ctx.lineWidth = 1;
+    // the planet's own name (the scan of 2026-09-22 found the disc unlabelled with the Amalthea node on its centre)
+    ctx.fillStyle = 'rgba(226,195,154,0.55)'; ctx.font = '600 11px "Rajdhani", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('JUPITER', jx, jy + 60);
     for (const r of [110, 190, 270]) { ctx.beginPath(); ctx.arc(jx, jy, r, 0, U.TAU); ctx.stroke(); }
     const pos = (n) => ({ x: n.x * w, y: n.y * h });
     const colour = (o) => o === 'JC' ? '#4fd1c5' : o === 'ISA' ? '#f0a04b' : '#8f9bad';
@@ -265,7 +267,7 @@
       const ex = c.pb.x - c.pa.x, ey = c.pb.y - c.pa.y, len = Math.hypot(ex, ey) || 1;
       let f = 0.5, lx = (c.pa.x + c.pb.x) / 2, ly = (c.pa.y + c.pb.y) / 2;
       for (let k = 0; k < 8; k++) {
-        const near = NODES.some((n) => { const q = pos(n); return Math.hypot(q.x - lx, q.y - ly) < 22; });
+        const near = NODES.some((n) => { const q = pos(n); return Math.hypot(q.x - lx, q.y - ly) < 24 || (Math.abs(q.y - 15 - (ly - 6)) < 12 && Math.abs(q.x - lx) < 46); });
         if (!near) break;
         f += (k % 2 ? -1 : 1) * (k + 1) * 14 / len; lx = c.pa.x + ex * f; ly = c.pa.y + ey * f;
       }
