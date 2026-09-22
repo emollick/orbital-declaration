@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orbital Declaration</title>
+<meta name="description" content="A hard science fiction space combat game. Newtonian motion, the rocket equation, heat that has to go somewhere, and no stealth at all. Eight story chapters, a campaign around Jupiter, skirmishes and a ship configurator.">
+<meta name="theme-color" content="#04070c">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="Orbital Declaration">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Orbital Declaration">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="canonical" href="https://orbital-declaration.netlify.app/">
+<link rel="icon" href="assets/site/icon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/site/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Orbital Declaration">
+<meta property="og:title" content="Orbital Declaration">
+<meta property="og:description" content="A hard science fiction space combat game. Newtonian motion, the rocket equation, heat that has to go somewhere, and no stealth at all. Eight story chapters, a campaign around Jupiter, skirmishes and a ship configurator.">
+<meta property="og:url" content="https://orbital-declaration.netlify.app/">
+<meta property="og:image" content="https://orbital-declaration.netlify.app/assets/site/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A cruiser under thrust in the Jovian system, with the title Orbital Declaration">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orbital Declaration">
+<meta name="twitter:description" content="A hard science fiction space combat game. Newtonian motion, the rocket equation, heat that has to go somewhere, and no stealth at all. Eight story chapters, a campaign around Jupiter, skirmishes and a ship configurator.">
+<meta name="twitter:image" content="https://orbital-declaration.netlify.app/assets/site/og.png">
+<link rel="preload" href="assets/site/fonts/rajdhani-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/site/fonts/plexsans-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* Fonts are served with the page (assets/site/fonts, SIL OFL): no third-party request on first load. */
+  /* Self-hosted subsets of Rajdhani and IBM Plex (SIL Open Font License), from Google Fonts. */
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(assets/site/fonts/plexmono-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url(assets/site/fonts/plexmono-500-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400 500; font-display: swap; src: url(assets/site/fonts/plexsans-400-greek.woff2) format('woff2'); unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+  @font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400 500; font-display: swap; src: url(assets/site/fonts/plexsans-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'Rajdhani'; font-style: normal; font-weight: 500; font-display: swap; src: url(assets/site/fonts/rajdhani-500-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'Rajdhani'; font-style: normal; font-weight: 600; font-display: swap; src: url(assets/site/fonts/rajdhani-600-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'Rajdhani'; font-style: normal; font-weight: 700; font-display: swap; src: url(assets/site/fonts/rajdhani-700-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* Bridge glass: everything on screen is a readout projected on the bridge's glass. No cards, no rounded web
+     controls, no frosted boxes. Hairlines, corner ticks, lit keys, tabular figures. */
+  :root {
+    --ground: #04070c; --glass: rgba(5, 9, 15, 0.74); --glass-2: rgba(5, 9, 15, 0.9); --glass-3: rgba(5, 9, 15, 0.97); --decide: #7fb8ff;
+    --line: rgba(120, 150, 180, 0.22); --line-2: rgba(120, 150, 180, 0.42);
+    --ink: #e0e8f0; --ink-2: #b1bfce; --dim: #7f91a7; --accent: #4fd1c5; --accent-ink: #04141a; --accent-2: #f0a04b; --civ: #b9c3d1;
+    --good: #7ad97a; --warn: #ffb454; --crit: #ff6b6b; --blue: #7fb8ff; --brake: #8fa6bf;
+    --display: 'Rajdhani', 'Bahnschrift', 'DIN Alternate', 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --tick: linear-gradient(var(--accent), var(--accent));
+    --tickd: linear-gradient(var(--line-2), var(--line-2));
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  html[data-text="large"] #hud, html[data-text="large"] #screens, html[data-text="large"] #tooltip { zoom: 1.18; }
+  #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: var(--line-2); } ::-webkit-scrollbar-track { background: transparent; }
+  button, input, select { font: inherit; color: inherit; }
+  /* keys: flat, square, bracketed at the corners; lit when active */
+  button { background: transparent; border: 0; border-radius: 0; padding: 6px 12px; cursor: pointer; font-family: var(--display); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12.5px; color: var(--ink-2); line-height: 1.2;
+    background-image: var(--tickd), var(--tickd), var(--tickd), var(--tickd), var(--tickd), var(--tickd), var(--tickd), var(--tickd);
+    background-size: 7px 1px, 1px 7px, 7px 1px, 1px 7px, 7px 1px, 1px 7px, 7px 1px, 1px 7px;
+    background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom;
+    background-repeat: no-repeat; transition: color 0.12s, background-color 0.12s; }
+  button:hover { color: var(--ink); background-image: var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick); background-color: rgba(79,209,197,0.07); }
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  button.primary { color: var(--accent); background-image: var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick); }
+  button.primary:hover { background-color: var(--accent); color: var(--accent-ink); }
+  button.active { background-color: var(--accent); color: var(--accent-ink); background-image: none; }
+  button.danger { color: #ffb0b0; } button.danger:hover { background-color: rgba(255,107,107,0.14); }
+  button.ghost { background-image: none; color: var(--dim); } button.ghost:hover { color: var(--ink); background-color: transparent; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  button.sm { padding: 4px 9px; font-size: 11.5px; }
+  button kbd { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0; color: var(--dim); margin-left: 8px; border: 1px solid var(--line-2); padding: 0 4px; line-height: 13px; vertical-align: 1px; }
+  button.active kbd, button.primary:hover kbd { color: var(--accent-ink); border-color: rgba(4,20,26,0.5); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=number], select { background: rgba(4,7,12,0.7); border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; padding: 4px 6px; font-family: var(--mono); font-size: 13px; width: 6.5em; color: var(--ink); }
+  select { width: auto; }
+  h1, h2, h3, h4 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spacing: 0.02em; }
+  h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--dim); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  h3::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  [data-tip] { cursor: help; }
+  .dim { color: var(--dim); }
+  /* glass readouts: scrim, hairline, accent corner ticks; the background stays put while the content scrolls */
+  .glass { background-color: var(--glass); border: 1px solid var(--line);
+    background-image: var(--tick), var(--tick), var(--tick), var(--tick), repeating-linear-gradient(0deg, rgba(255,255,255,0.022) 0 1px, transparent 1px 3px);
+    background-size: 14px 2px, 2px 14px, 14px 2px, 2px 14px, auto;
+    background-position: left top, left top, right bottom, right bottom, 0 0; background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat; }
+
+  /* ---- HUD ---- */
+  #hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: 244px 1fr 328px; grid-template-areas: "top top top" "fleet . ship" "bottom bottom ship"; }
+  #hud > * { pointer-events: auto; }
+  #topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 14px; padding-top: calc(5px + env(safe-area-inset-top, 0px)); background: linear-gradient(180deg, rgba(4,7,12,0.92), rgba(4,7,12,0.55)); border-bottom: 1px solid var(--line); }
+  .tb-left { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+  .tb-left .mode { font-family: var(--display); font-weight: 700; letter-spacing: 0.22em; color: var(--accent); font-size: 11.5px; text-transform: uppercase; white-space: nowrap; }
+  .tb-left .mission { font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+  .tb-mid { display: flex; align-items: center; gap: 14px; }
+  #clock { font-family: var(--display); font-weight: 600; font-size: 24px; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1; }
+  .tb-right { display: flex; align-items: center; gap: 4px; }
+  .tb-right > button { background-image: none; color: var(--dim); padding: 6px 9px; }
+  .tb-right > button:hover { color: var(--accent); background-color: transparent; }
+  .seg { display: inline-flex; gap: 1px; margin-right: 8px; }
+  .seg button { background-image: none; border-bottom: 2px solid var(--line); padding: 5px 8px; min-width: 38px; color: var(--dim); }
+  .seg button:hover { color: var(--ink); background-color: transparent; border-bottom-color: var(--line-2); }
+  .seg button.active kbd { color: var(--accent); border-color: var(--accent); }
+  .seg button.active { background-color: transparent; color: var(--accent); border-bottom-color: var(--accent); }
+  #fleet { grid-area: fleet; align-self: start; margin: 12px; max-height: calc(100% - 24px); overflow: auto; }
+  #fleet h3, #shipPanel h3 { padding: 8px 12px 4px; }
+  .fleet-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 12px 7px 14px; border-top: 1px solid var(--line); cursor: pointer; position: relative; }
+  .fleet-row:hover { background: rgba(120,150,180,0.08); }
+  .fleet-row.selected { background: rgba(79,209,197,0.1); box-shadow: inset 3px 0 0 var(--accent); }
+  .fleet-row.targeted { box-shadow: inset 3px 0 0 var(--warn); }
+  .fleet-row .name { font-family: var(--display); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; letter-spacing: 0.03em; }
+  .fleet-row .order { font-family: var(--mono); font-size: 10.5px; color: var(--dim); text-align: right; text-transform: uppercase; letter-spacing: 0.06em; align-self: center; }
+  .fleet-row .bars { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .bar { height: 3px; background: rgba(255,255,255,0.1); overflow: hidden; position: relative; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); }
+  .bar.heat > i { background: var(--good); } .bar.heat.warn > i { background: var(--warn); } .bar.heat.crit > i { background: var(--crit); }
+  .bar.hull > i { background: var(--ink-2); } .bar.hull.crit > i { background: var(--crit); }
+  .bar.dv > i { background: var(--blue); }
+  .fleet-row.hostile .name { color: var(--accent-2); }
+  .fleet-row.disabled { opacity: 0.55; }
+
+  #shipPanel { grid-area: ship; margin: 12px; overflow: auto; display: flex; flex-direction: column; }
+  #shipPanel .head { padding: 10px 12px 6px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .portrait-wrap { position: relative; }
+  .portrait-wrap .head-tools { position: absolute; top: 4px; right: 8px; display: flex; gap: 4px; }
+  #shipPanel .head .name { font-family: var(--display); font-weight: 700; font-size: 19px; line-height: 1.05; letter-spacing: 0.03em; }
+  #shipPanel .head .cls { color: var(--dim); font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
+  .head-r { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+  .head-r .btnrow { justify-content: flex-end; }
+  .portrait { display: block; width: 100%; height: 86px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0)); cursor: zoom-in; }
+  .badge { display: inline-block; font-family: var(--display); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; padding: 1px 6px; border: 1px solid currentColor; white-space: nowrap; }
+  .badge.JC { color: var(--accent); } .badge.ISA { color: var(--accent-2); } .badge.CIV { color: var(--civ); }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 6px; border-left: 2px solid var(--line-2); color: var(--ink-2); }
+  .pill.warn { border-left-color: var(--warn); color: var(--warn); } .pill.crit { border-left-color: var(--crit); color: var(--crit); } .pill.good { border-left-color: var(--good); color: var(--good); }
+  .section { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  .section:last-child { border-bottom: 0; }
+  .section h4 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .section h4::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 1; }
+  .section h4 > :last-child:not(:first-child) { order: 2; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
+  .kv .k { color: var(--dim); white-space: nowrap; }
+  .kv .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+  .kv .v.good, .v.good { color: var(--good); } .kv .v.warn, .v.warn { color: var(--warn); } .kv .v.crit, .v.crit { color: var(--crit); }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 5px; }
+  .btnrow button { flex: 1 1 auto; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+  #pRange { width: 60px; }
+  #pVmax { flex: 1; min-width: 96px; }
+  .row label { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .heatbar { height: 8px; background: rgba(255,255,255,0.07); overflow: hidden; position: relative; margin: 4px 0 7px; background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(255,255,255,0.14) calc(10% - 1px) 10%); }
+  .heatbar > i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #7ad97a, #ffb454 60%, #ff5d5d); }
+  .heatbar > b { position: absolute; left: 85%; top: 0; bottom: 0; width: 1px; background: rgba(255,107,107,0.8); }
+  .sysbars { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; font-size: 12px; }
+  .sysbars .k { color: var(--dim); } .sysbars .v { font-family: var(--mono); font-size: 12px; }
+  .empty { color: var(--dim); font-size: 13px; padding: 16px 12px; }
+  #shipPanel[data-detail="essentials"] [data-adv]:not(.force) { display: none; }
+  .blurb { color: var(--dim); font-size: 12.5px; }
+
+  /* vitals */
+  .vitals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 9px; border-bottom: 1px solid var(--line); }
+  .vitals .k { display: block; font-family: var(--display); font-weight: 600; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+  .vitals .v { display: block; font-family: var(--display); font-weight: 600; font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; letter-spacing: 0; }
+  .vitals .v.warn { font-size: 16px; line-height: 1.15; }
+  /* top bar next event */
+  .next { font-family: var(--mono); font-size: 12px; color: var(--ink-2); white-space: nowrap; letter-spacing: 0.02em; }
+  .next:empty { display: none; }
+  .next::before { content: '▸ '; color: var(--accent); }
+  /* map key: a strip, not a card */
+  #legend { grid-area: fleet; align-self: end; margin: 12px; padding: 6px 10px 7px; font-size: 11px; color: var(--ink-2); display: grid; grid-template-columns: 1fr; gap: 2px 12px; max-width: 220px; box-sizing: border-box; background-color: var(--glass); border-top: 1px solid var(--line); }
+  .lg-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-family: var(--display); font-weight: 600; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+  .lg-head button { padding: 0 6px; font-size: 14px; line-height: 1.2; }
+  .lg-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--accent); flex: none; }
+  .sw.drift { border-top: 1px dashed rgba(180,192,207,0.7); }
+  .sw.burn { border-top: 2px solid var(--accent); }
+  .sw.brake { border-top: 2px solid var(--brake); }
+  .sw.ring { width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 50%; margin: 0 6px; }
+  .sw.sel { width: 9px; height: 9px; border: 1.5px solid #fff; border-radius: 50%; margin: 0 6px; }
+  .sw.tgt { width: 9px; height: 9px; border: 2px solid #e8eef5; margin: 0 6px; }
+  /* navigator */
+  .nav { border-left: 3px solid var(--accent); background: linear-gradient(90deg, rgba(79,209,197,0.09), rgba(79,209,197,0)); }
+  .nav[data-phase="burn"], .nav[data-phase="trim"] { border-left-color: var(--blue); background: linear-gradient(90deg, rgba(127,184,255,0.1), rgba(127,184,255,0)); }
+  .nav[data-phase="brake"] { border-left-color: var(--brake); background: linear-gradient(90deg, rgba(143,166,191,0.14), rgba(143,166,191,0)); }
+  .nav[data-phase="turn"] { border-left-color: var(--ink-2); background: linear-gradient(90deg, rgba(180,192,207,0.1), rgba(180,192,207,0)); }
+  .nav[data-phase="warn"], .nav[data-phase="dry"], .nav[data-phase="disabled"], .nav[data-phase="lost"], .nav[data-phase="avoid"] { border-left-color: var(--crit); background: linear-gradient(90deg, rgba(255,107,107,0.12), rgba(255,107,107,0)); }
+  .nav-head { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; font-family: var(--display); font-weight: 600; }
+  .nav-line { font-size: 14.5px; font-weight: 500; line-height: 1.35; }
+  .nav-sub { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.4; }
+  .tipline { margin-top: 7px; padding: 4px 8px; border-left: 2px solid var(--accent); font-size: 12.5px; color: var(--ink-2); }
+  .tipline::before { content: 'Tip · '; color: var(--accent); font-family: var(--display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+
+  /* gauges: instrument bars with tick marks */
+  .gauge-row, .gauge-foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; gap: 8px; }
+  .gauge-row .k { color: var(--dim); } .gauge-row .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .gauge-foot { font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+  .gauge { height: 10px; background: rgba(255,255,255,0.07); position: relative; overflow: hidden; margin: 5px 0 4px; background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(255,255,255,0.16) calc(10% - 1px) 10%); }
+  .gauge .fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #3f80d8, #7fb8ff); transition: width 0.3s; }
+  .gauge .cost { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, rgba(255,255,255,0.75) 0 3px, rgba(255,255,255,0.12) 3px 6px); transition: width 0.3s, left 0.3s; }
+  .gauge .cost.over { background: repeating-linear-gradient(135deg, rgba(255,107,107,0.9) 0 3px, rgba(255,107,107,0.25) 3px 6px); }
+
+  /* orders: a keyboard of lit keys */
+  .orders { gap: 4px; }
+  .orders button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 1 1 44%; padding: 6px 10px; text-align: left; }
+  .orders button > span { display: block; width: 100%; box-sizing: border-box; padding-right: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .orders button > span kbd { position: absolute; top: 5px; right: 6px; margin: 0; }
+  .orders button small { font-family: var(--mono); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .orders button.active small { color: var(--accent-ink); opacity: 0.8; }
+
+  /* facing */
+  .facing-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 13px; }
+  .facing-row .k { color: var(--dim); white-space: nowrap; } .facing-row .facing { width: 52px; height: 20px; flex: none; }
+  .facing-row .v { margin-left: auto; font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .facing polygon { fill: rgba(127,142,163,0.18); stroke: rgba(180,192,207,0.6); stroke-width: 1; }
+  .facing .f-nose.seen { fill: var(--good); stroke: #fff; } .facing .f-flank.seen { fill: var(--warn); stroke: #fff; } .facing .f-tail.seen { fill: var(--crit); stroke: #fff; }
+
+  #bottom { grid-area: bottom; display: grid; grid-template-columns: 1fr 320px; gap: 12px; margin: 0 12px 12px; align-items: end; }
+  #log { padding: 6px 12px; max-height: 150px; overflow: auto; font-size: 12.5px; }
+  #log .line { display: grid; grid-template-columns: 60px 96px 1fr; gap: 8px; padding: 2px 0; }
+  #log .t { font-family: var(--mono); color: var(--dim); font-size: 11.5px; }
+  #log .who { font-family: var(--display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11.5px; color: var(--ink-2); }
+  #log .line.comms .who { color: var(--accent); } #log .line.warn .msg { color: var(--warn); } #log .line.alert .msg { color: var(--crit); } #log .line.good .msg { color: var(--good); }
+  #objectives { padding: 8px 12px; }
+  #objectives h3 { padding: 0 0 4px; }
+  .obj { display: grid; grid-template-columns: 16px 1fr; gap: 2px 8px; padding: 3px 0; font-size: 12.5px; }
+  .obj .mark { font-family: var(--mono); color: var(--dim); } .obj.done .mark { color: var(--good); } .obj.failed .mark { color: var(--crit); }
+  .obj.done .text { color: var(--dim); text-decoration: line-through; }
+  .obj .bar { grid-column: 2; height: 3px; }
+  .obj .bar > i { background: var(--accent); }
+
+  [hidden] { display: none !important; }
+  /* advisory band: docked across the map above the log */
+  #hint { position: absolute; left: 268px; right: 352px; bottom: 176px; background: var(--glass-3); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-top: 1px solid rgba(79,209,197,0.5); border-bottom: 1px solid rgba(79,209,197,0.5); border-left: 3px solid var(--accent); padding: 10px 16px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; }
+  #hint p { margin: 0; font-size: 14px; line-height: 1.45; }
+  #hint .eyebrow { font-family: var(--display); color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-size: 11px; margin-bottom: 3px; font-weight: 600; }
+  #hint .hint-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .glow { animation: glow 1.2s ease-in-out infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 0 0 rgba(79,209,197,0.0); } to { box-shadow: 0 0 0 3px rgba(79,209,197,0.6); } }
+  /* comms line: docked at the top of the map */
+  #toast { position: absolute; top: 54px; left: 268px; right: 352px; background: var(--glass-2); border-bottom: 1px solid var(--line); padding: 8px 16px; font-family: var(--display); font-size: 15px; letter-spacing: 0.06em; text-align: center; color: var(--ink-2); }
+  #toast.comms { font-family: var(--sans); font-size: 14px; letter-spacing: 0; text-align: left; border-left: 3px solid var(--accent); color: var(--ink); }
+  #toast.comms b { font-family: var(--display); color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; margin-right: 10px; }
+  #tooltip { position: absolute; z-index: 30; max-width: 340px; background: var(--glass-2); border: 1px solid var(--line-2); border-left: 2px solid var(--accent); padding: 8px 10px; pointer-events: none; font-size: 12.5px; }
+  #tooltip .tt-title { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 3px; color: var(--accent); }
+  #tooltip .tt-body { color: var(--ink-2); }
+  #tooltip .tt-formula { font-family: var(--mono); font-size: 11.5px; color: var(--ink); margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--line); white-space: pre-wrap; }
+
+  /* ---- Screens: text on the glass, no cards ---- */
+  .screen { position: absolute; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; background: radial-gradient(ellipse at 50% 40%, rgba(6,10,17,0.88), rgba(4,7,12,0.97)); overflow-y: scroll; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(127,184,255,0.45) transparent; padding: 28px 24px 72px; box-sizing: border-box; }
+  .screen .card { margin: auto; width: min(760px, 100%); padding: 6px 0; }
+  .screen .card.wide { width: min(1040px, 100%); }
+  .screen.beside { justify-content: flex-start; align-items: center; background: linear-gradient(90deg, rgba(4,7,12,0.9) 0, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.2) 100%); }
+  .screen.beside .card { width: min(520px, 100%); margin: auto auto auto 6vw; }
+  .screen.beside .card.wide { width: min(640px, 100%); }
+  /* a screen over the bridge dims the console so the map is all that shows through */
+  body.screen-open #hud { opacity: 0.06; }
+  body.screen-open #view { opacity: 0.12; }
+  body.screen-open #hud * { pointer-events: none; }
+  .fade-in { animation: fadein 0.4s ease-out; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .eyebrow { font-family: var(--display); color: var(--accent); letter-spacing: 0.24em; text-transform: uppercase; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .eyebrow::before { content: ''; width: 18px; height: 2px; background: var(--accent); flex: none; }
+  .title { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 6vw, 64px); line-height: 0.95; letter-spacing: 0.02em; margin: 8px 0 6px; }
+  .sub { color: var(--ink-2); font-size: 15px; max-width: 60ch; }
+  /* console list: the mode picker and chapter list */
+  .menu-actions { display: grid; grid-template-columns: 1fr; gap: 0; margin: 22px 0 8px; border-top: 1px solid var(--line-2); }
+  .menu-actions.cols { grid-template-columns: 1fr 1fr; column-gap: 24px; }
+  .menu-actions button { position: relative; padding: 11px 12px 11px 34px; font-size: 16px; text-align: left; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; border-bottom: 1px solid var(--line); background-image: none; color: var(--ink); letter-spacing: 0.12em; counter-increment: entry; }
+  .menu-actions button::before { content: counter(entry, decimal-leading-zero); position: absolute; left: 0; top: 13px; font-family: var(--mono); font-size: 11px; color: var(--dim); letter-spacing: 0; }
+  .menu-actions button::after { content: ''; position: absolute; left: 20px; top: 12px; bottom: 12px; width: 2px; background: transparent; }
+  .menu-actions button:hover, .menu-actions button:focus-visible { background-color: rgba(79,209,197,0.06); color: var(--accent); outline: 0; }
+  .menu-actions button:hover::after, .menu-actions button:focus-visible::after, .menu-actions button.primary::after { background: var(--accent); }
+  .menu-actions button.primary { color: var(--accent); }
+  .menu-actions button.primary:hover { background-color: rgba(79,209,197,0.1); color: var(--accent); }
+  .menu-actions button small { font-family: var(--sans); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--dim); font-size: 12.5px; }
+  .menu-actions { counter-reset: entry; }
+  .foot { color: var(--dim); font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-family: var(--mono); letter-spacing: 0.04em; }
+  .settings { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); font-family: var(--display); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
+  .settings .seg { margin: 0; }
+  .settings .seg button { text-transform: none; font-family: var(--sans); font-weight: 500; font-size: 12.5px; letter-spacing: 0; min-width: 0; padding: 3px 8px; }
+  .settings label { display: flex; align-items: center; gap: 8px; }
+  .brief p { margin: 0 0 10px; max-width: 68ch; font-size: 14.5px; }
+  .brief h3 { margin: 12px 0 6px; }
+  .brief .meta { font-family: var(--mono); color: var(--dim); font-size: 12.5px; margin: 8px 0 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .brief .comm { border-left: 2px solid var(--accent); padding: 4px 12px; margin: 8px 0 12px; color: var(--ink-2); font-style: italic; max-width: 68ch; }
+  .brief .comm b { font-style: normal; font-family: var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-size: 12px; display: block; }
+  .objlist { margin: 6px 0 16px; padding: 0; list-style: none; }
+  .objlist li { padding: 4px 0 4px 20px; position: relative; }
+  .objlist li::before { content: '◇'; position: absolute; left: 0; color: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .actions button { padding: 9px 18px; font-size: 13.5px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin: 14px 0 4px; border-top: 1px solid var(--line-2); }
+  .stat { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .stat .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; font-family: var(--display); font-weight: 600; }
+  .stat .v { font-family: var(--mono); font-size: 15px; text-align: right; }
+  .debrief-victory .title { color: var(--accent); } .debrief-defeat .title { color: var(--crit); }
+  .help h4 { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 16px 0 4px; }
+  .help p, .help li { font-size: 13.5px; max-width: 72ch; }
+  .help kbd { font-family: var(--mono); border: 1px solid var(--line-2); padding: 0 5px; font-size: 11.5px; }
+
+  /* physics panel: sections, not boxes */
+  .phys { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 28px; margin-top: 12px; }
+  .phys .box { border-top: 1px solid var(--line-2); padding: 10px 0 14px; }
+  .phys .box.wide { grid-column: 1 / -1; }
+  .phys .box h4 { font-family: var(--display); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+  .phys .box p { margin: 0 0 6px; color: var(--ink-2); font-size: 13px; }
+  .phys .box .f { font-family: var(--mono); font-size: 12.5px; color: var(--ink); white-space: pre-wrap; border-left: 2px solid var(--line-2); padding: 4px 10px; }
+  .phys .plot { width: 100%; height: 220px; display: block; margin-top: 8px; }
+
+  /* hull view */
+  .hullview { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; margin-top: 12px; }
+  .hullview .pic { position: relative; height: 440px; }
+  .hullview .pic canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); background: radial-gradient(ellipse at 50% 50%, #141e2c, #04070c 78%); }
+  .hullview .kv { align-content: start; font-size: 13px; border-top: 1px solid var(--line-2); padding-top: 8px; }
+  .hullview .kv .k { padding: 2px 0; } .hullview .kv .v { padding: 2px 0; }
+  .hullview .views { display: flex; gap: 4px; margin-bottom: 8px; }
+
+  /* campaign map */
+  #campMap { width: 100%; height: 440px; display: block; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); background: #04070c; }
+  .camp-grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; }
+  .camp-side { display: flex; flex-direction: column; gap: 10px; }
+  .camp-side .box { border-top: 1px solid var(--line-2); padding: 8px 0; font-size: 12.5px; }
+  .camp-side .box h4 { font-family: var(--display); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+  .camp-side .ship { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 3px 0; border-top: 1px solid var(--line); }
+  .camp-side .ship .bars { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .skirm { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .skirm .col h4 { font-family: var(--display); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 6px; }
+  .skirm .col h4.JC { color: var(--accent); } .skirm .col h4.ISA { color: var(--accent-2); }
+  .skirm .line { display: grid; grid-template-columns: 1fr 5em; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .skirm input[type=number] { width: 4.5em; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
+  .opts label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); font-size: 12.5px; }
+
+  @media (max-width: 900px) {
+    .camp-grid { grid-template-columns: 1fr; }
+    #campMap { height: 260px; }
+    /* One column that can never grow past the viewport: the top bar wraps instead of widening the grid. */
+    #hud { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(180px, 1fr) auto auto; grid-template-areas: "top" "hint" "." "ship" "bottom"; }
+    #btnFit, #btnHull, #modeLabel { display: none; }
+    #topbar { flex-wrap: wrap; gap: 6px 10px; padding-left: 8px; padding-right: 8px; }
+    .tb-left, .tb-mid, .tb-right { min-width: 0; flex-wrap: wrap; }
+    #clock { font-size: 18px; }
+    .seg button { min-width: 34px; padding: 5px 6px; }
+    #fleet { display: none; }
+    #shipPanel { margin: 0 8px 6px; max-height: 36vh; background-color: var(--glass-3); }
+    .portrait { height: 44px; }
+    #bottom { grid-template-columns: minmax(0, 1fr); margin: 0 8px 8px; }
+    #log { max-height: 96px; font-size: 12px; }
+    #log .line { grid-template-columns: 58px 60px minmax(0, 1fr); gap: 6px; }
+    #log .line .t { font-size: 11px; }
+    .nav-line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .nav-sub { display: none; }
+    #log .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+    #log .line > :last-child { overflow-wrap: anywhere; }
+    #objectives { display: none; }
+    .tb-left .mission { display: none; }
+    /* the advisory band sits in the flow under the top bar, so it pushes the map down instead of covering it */
+    #hint { position: static; grid-area: hint; margin: 0 8px 4px; grid-template-columns: 1fr; }
+    #legend { display: none; }
+    #toast { left: 0; right: 0; top: auto; bottom: calc(36vh + 110px); }
+    #hint:not([hidden]) ~ #toast { display: none; }
+    .screen { padding: 20px 16px; }
+    .screen.beside { justify-content: center; }
+    .screen.beside .card { margin-left: 0; }
+    .menu-actions.cols { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; }
+    .hullview { grid-template-columns: 1fr; }
+    .hullview .pic { height: 260px; }
+    .vitals .v { font-size: 17px; }
+    #hint .hint-actions { flex-direction: row; }
+  }
+  @media (prefers-reduced-motion: reduce) { .glow { animation: none; box-shadow: 0 0 0 3px rgba(79,209,197,0.6); } .gauge .fill, .gauge .cost { transition: none; } .fade-in { animation: none; } }
+  /* bridge console mirror: real keys for keyboards and screen readers, off the glass (the console itself is drawn on #view) */
+  #bridgeA11y { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  #bridgeA11y button { background-image: none; padding: 0; }
+  /* boot splash: the title where the menu will appear, shown only until the scripts have loaded (main.js removes it) */
+  #boot { position: absolute; inset: 0; z-index: 25; display: flex; align-items: center; padding: 28px calc(6vw + 24px); box-sizing: border-box; background: linear-gradient(90deg, rgba(4,7,12,0.9) 0, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.2) 100%); }
+  #boot .card { width: min(520px, 100%); }
+  #boot .load { margin-top: 20px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+  #boot .load::after { content: '_'; animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  @media (max-width: 900px) { #boot { padding: 20px 16px; } }
+  @media (prefers-reduced-motion: reduce) { #boot .load::after { animation: none; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="view" aria-label="Tactical map"></canvas>
+  <div id="hud" hidden>
+    <header id="topbar">
+      <div class="tb-left"><span class="mode" id="modeLabel">Story</span><span class="mission" id="missionName">—</span></div>
+      <div class="tb-mid"><span id="clock" data-tip="clock">00:00:00</span><span id="warpLabel" class="pill">paused</span><span id="next" class="next" data-tip="next"></span><button id="btnSkip" class="sm" hidden data-tip="skip">Skip ahead</button></div>
+      <div class="tb-right">
+        <div class="seg" id="warp" data-tip="warp" role="group" aria-label="Time warp">
+          <button data-warp="0" id="warp0" title="Pause (space)" aria-label="Pause">⏸</button>
+          <button data-warp="1" id="warp1" aria-label="Real time">1×</button>
+          <button data-warp="4" id="warp4" aria-label="4 times">4×</button>
+          <button data-warp="16" id="warp16" aria-label="16 times">16×</button>
+          <button data-warp="64" id="warp64" aria-label="64 times">64×</button>
+        </div>
+        <button id="btnFit" class="sm" data-tip="fit" title="Show all ships (Home)">Show all</button>
+        <button id="btnHull" class="sm" data-tip="hullview" title="Hull view (V)">Hull<kbd>V</kbd></button>
+        <button id="btnPhysics" class="sm" data-tip="physics" title="Physics (P)">Physics</button>
+        <button id="btnHelp" class="sm">Help</button>
+        <button id="btnMenu" class="sm">Menu</button>
+      </div>
+    </header>
+    <aside id="fleet" class="glass" aria-label="Ships and contacts"><h3>Ships</h3><div id="fleetList"></div></aside>
+    <div id="legend" aria-label="Map key"><div class="lg-head"><span>Map key</span><button id="legendClose" class="sm ghost" aria-label="Hide the map key">×</button></div>
+      <div class="lg-row"><i class="sw drift"></i>drift if nothing burns</div>
+      <div class="lg-row"><i class="sw burn"></i>burning</div>
+      <div class="lg-row"><i class="sw brake"></i>braking tail-first</div>
+      <div class="lg-row"><i class="sw ring"></i>flip · arrival</div>
+      <div class="lg-row"><i class="sw sel"></i>selected</div>
+      <div class="lg-row"><i class="sw tgt"></i>target</div>
+    </div>
+    <aside id="shipPanel" class="glass" aria-label="Ship panel" data-detail="essentials"><div class="empty">Click one of your ships to take command, or pick it from the list.</div></aside>
+    <section id="bottom">
+      <div id="log" class="glass" aria-live="polite" aria-label="Log"></div>
+      <div id="objectives" class="glass"><h3>Objectives</h3><div id="objList"></div></div>
+    </section>
+    <div id="hint" hidden role="status"><div class="hint-body"><div class="eyebrow" id="hintStep">Hint</div><p id="hintText"></p></div><div class="hint-actions"><button id="hintOk" class="sm primary">Got it<kbd>⏎</kbd></button><button id="hintSkip" class="sm ghost" hidden>Skip tour</button></div></div>
+    <div id="toast" hidden role="status"></div>
+  </div>
+  <div id="tooltip" hidden role="tooltip"></div>
+  <div id="screens"></div>
+  <div id="bridgeA11y"></div>
+  <div id="boot"><div class="card"><div class="eyebrow">Jovian system · 2211</div><h1 class="title">Orbital<br>Declaration</h1><p class="sub">A hard science fiction space combat game. Newtonian motion, the rocket equation, heat that has to go somewhere, and no stealth at all.</p><p class="load">Loading the bridge</p><noscript><p class="sub">The bridge needs JavaScript. Please enable it, or open the page in a current browser.</p></noscript></div></div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/ships.js"></script>
+<script src="js/autopilot.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/guide.js"></script>
+<script src="js/damage.js"></script>
+<script src="js/crew.js"></script>
+<script src="js/sensors.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/shipart.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/story.js"></script>
+<script src="js/campaign.js"></script>
+<script src="js/skirmish.js"></script>
+<script src="js/engagement.js"></script>
+<script src="js/decisions.js"></script>
+<script src="js/configurator.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

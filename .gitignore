@@ -1,0 +1,16 @@
+# Dependencies, if Playwright is installed locally instead of globally
+node_modules/
+
+# Outputs of the tools
+dist/
+tools/bridge-shots/
+*.log
+
+# Left behind by the Netlify deploy command
+.netlify/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

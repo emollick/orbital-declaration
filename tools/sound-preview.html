@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sound preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #06080c; color: #b9c3d1; font: 13px/1.4 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #1c2430; position: sticky; top: 0; background: #06080cee; }
+  header label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  header input[type=range] { width: 160px; }
+  button { background: #0f151d; color: inherit; border: 1px solid #2a3542; padding: 6px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: #5d8fc2; color: #e6edf5; }
+  main { padding: 12px 16px 40px; max-width: 900px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 18px 0 6px; color: #7f8b9a; letter-spacing: 0.06em; text-transform: uppercase; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row button { min-width: 96px; text-align: left; }
+  .row button small { display: block; color: #5d6a7a; font-size: 11px; }
+  #state { color: #5d6a7a; }
+  #state.on { color: #7fc27f; }
+  p { color: #7f8b9a; margin: 4px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Sound</strong>
+  <span id="state">idle</span>
+  <label><input id="enabled" type="checkbox"> Enabled</label>
+  <label>Ambient level <input id="ambient" type="range" min="0" max="1" step="0.01" value="0.2"> <span id="ambVal">0.20</span></label>
+  <label><input id="ambOn" type="checkbox" checked> Ambient on</label>
+  <button id="all">Play all</button>
+</header>
+<main>
+  <p>Click anywhere first: the browser only lets the context start on a gesture. Cues are meant to be quiet; leave the volume where you would keep it for the game.</p>
+  <h2>Console</h2><div class="row" data-group="key tick open back confirm comms warp"></div>
+  <h2>Advisories</h2><div class="row" data-group="alert caution incoming contact"></div>
+  <h2>Engagement</h2><div class="row" data-group="launch pd hit through component wreck boom boarding"></div>
+  <h2>Outcome</h2><div class="row" data-group="victory defeat"></div>
+  <h2>Textures through watch()</h2>
+  <p>These push events into a fake sim and call watch() every frame, the way the game loop does, so the throttling is what you hear.</p>
+  <div class="row">
+    <button id="broadside">Broadside<small>40 point-defence kills in 1.2 s</small></button>
+    <button id="salvo">Salvo<small>launch ×4, then incoming ×4</small></button>
+    <button id="beams">Beams on target<small>12 hits + 3 burn-throughs in 1 s</small></button>
+    <button id="lines">Log lines<small>contact, alert, good, comms</small></button>
+  </div>
+  <p id="stats"></p>
+</main>
+<script>window.OD = window.OD || {};</script>
+<script src="../js/util.js"></script>
+<script src="../js/sound.js"></script>
+<script>
+  (function () {
+    const S = OD.Sound;
+    const $ = (id) => document.getElementById(id);
+    S.init();
+    const TIPS = { key: 'a key pressed', tick: 'clock / tutorial', open: 'screen opens', back: 'screen closes', confirm: "'good' log line", comms: 'radio blip', warp: 'time warp change',
+      alert: "'alert' log line", caution: "other 'warn' line", incoming: 'threat inbound', contact: 'new contact', launch: 'interceptors away', pd: 'point-defence kill', hit: 'energy on hull',
+      through: 'burn-through', component: 'component damaged', wreck: 'ship out of the fight', boom: 'ship destroyed', boarding: 'prize crew aboard', victory: 'objectives complete', defeat: 'engagement lost' };
+    document.querySelectorAll('[data-group]').forEach((row) => {
+      row.dataset.group.split(' ').forEach((name) => {
+        const b = document.createElement('button');
+        b.innerHTML = name + '<small>' + (TIPS[name] || '') + '</small>';
+        b.addEventListener('click', () => { S.unlock(); S.play(name); });
+        row.appendChild(b);
+      });
+    });
+    $('enabled').checked = S.enabled;
+    $('enabled').addEventListener('change', (e) => { S.setEnabled(e.target.checked); });
+    $('all').addEventListener('click', () => { S.unlock(); S.test(); });
+    const amb = () => { const on = $('ambOn').checked; const v = +$('ambient').value; $('ambVal').textContent = v.toFixed(2); S.ambient(on ? v : -1); };
+    $('ambient').addEventListener('input', amb);
+    $('ambOn').addEventListener('change', amb);
+
+    // A fake sim, shaped like the game's: a log and the engagement event ring.
+    const sim = { log: [], eng: { events: [], eventSeq: 0, eventFirst: 0 } };
+    function emit(kind, text) { sim.eng.events.push({ t: 0, kind, x: 0, y: 0, shipId: 'a', fromId: 'b', text: text || '' }); sim.eng.eventSeq++; while (sim.eng.events.length > 200) { sim.eng.events.shift(); sim.eng.eventFirst++; } }
+    function burst(kind, n, ms) { for (let i = 0; i < n; i++) setTimeout(() => emit(kind), (i / n) * ms); }
+    $('broadside').addEventListener('click', () => burst('pdkill', 40, 1200));
+    $('salvo').addEventListener('click', () => { burst('launch', 4, 80); setTimeout(() => burst('incoming', 4, 300), 900); });
+    $('beams').addEventListener('click', () => { burst('hit', 12, 1000); setTimeout(() => burst('through', 3, 600), 300); });
+    $('lines').addEventListener('click', () => {
+      const L = [['Contact: ISA Sabre (destroyer) at 400 km, closing 1.2 km/s.', 'Sensors', 'warn'], ['Larkspur — Radiator panel 2 wrecked: cooling down a third.', 'Damage control', 'alert'], ['Objective complete: hold the lane.', 'Command', 'good'], ['Meridian here. We are holding.', 'Comms', 'comms']];
+      L.forEach((l, i) => setTimeout(() => sim.log.push({ t: 0, text: l[0], speaker: l[1], kind: l[2] }), i * 700));
+    });
+    function frame() {
+      S.watch(sim);
+      if ($('ambOn').checked) amb();
+      const st = S.state(); const el = $('state'); el.textContent = st === 'running' ? 'context running' : st === 'unavailable' ? 'WebAudio unavailable' : 'context ' + st + ' (click to unlock)'; el.className = st === 'running' ? 'on' : '';
+      const s = S.stats(); $('stats').textContent = 'played: ' + Object.entries(s.played).map(([k, v]) => k + ' ' + v).join(', ') + (s.dropped ? '  |  throttled: ' + s.dropped : '');
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>

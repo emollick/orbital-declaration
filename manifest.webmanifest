@@ -1,0 +1,15 @@
+{
+  "name": "Orbital Declaration",
+  "short_name": "Orbital Decl.",
+  "description": "A hard science fiction space combat game: Newtonian motion, the rocket equation, heat that has to go somewhere, and no stealth at all.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#04070c",
+  "theme_color": "#04070c",
+  "icons": [
+    { "src": "assets/site/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/site/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/site/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

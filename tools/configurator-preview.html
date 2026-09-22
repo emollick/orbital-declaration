@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yard · ship configurator preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  /* the game's bridge tokens, so the yard looks here as it will in the game */
+  :root {
+    --ground: #04070c; --glass: rgba(5, 9, 15, 0.74); --glass-2: rgba(5, 9, 15, 0.9);
+    --line: rgba(120, 150, 180, 0.22); --line-2: rgba(120, 150, 180, 0.42);
+    --ink: #e0e8f0; --ink-2: #b1bfce; --dim: #7f91a7; --accent: #4fd1c5; --accent-ink: #04141a; --accent-2: #f0a04b; --civ: #b9c3d1;
+    --good: #7ad97a; --warn: #ffb454; --crit: #ff6b6b; --blue: #7fb8ff; --brake: #ffb454;
+    --display: 'Rajdhani', 'Bahnschrift', 'DIN Alternate', 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --tick: linear-gradient(var(--accent), var(--accent));
+    --tickd: linear-gradient(var(--line-2), var(--line-2));
+    color-scheme: dark;
+  }
+  html, body { min-height: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(ellipse at 50% 40%, rgba(6,10,17,0.6), rgba(4,7,12,0.9)); }
+  .frame { width: min(1240px, 100%); margin: 0 auto; padding: 22px 24px 60px; box-sizing: border-box; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11.5px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 14px; }
+  .bar b { color: var(--ink-2); font-weight: 500; }
+  .bar button { background: transparent; border: 0; color: var(--dim); font: inherit; letter-spacing: inherit; text-transform: uppercase; cursor: pointer; padding: 2px 6px; border-bottom: 1px solid var(--line); }
+  .bar button:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  #report { margin-top: 18px; padding: 10px 14px; border-left: 3px solid var(--accent-2); background: linear-gradient(90deg, rgba(240,160,75,0.10), rgba(240,160,75,0)); font-size: 13px; white-space: pre-wrap; font-family: var(--mono); color: var(--ink-2); }
+  #report:empty { display: none; }
+  @media (max-width: 900px) { .frame { padding: 14px 16px 40px; } }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="bar"><span><b>Orbital Declaration</b> · yard preview · standalone, nothing here touches the game's save</span>
+    <span><button id="pvTest">Test flight</button> <button id="pvChecks">Run checks</button> <button id="pvClear">Clear report</button></span></div>
+  <div id="yard"></div>
+  <div id="report"></div>
+</div>
+<script>window.OD = window.OD || {};</script>
+<script src="../js/util.js"></script>
+<script src="../js/physics.js"></script>
+<script src="../js/ships.js"></script>
+<script src="../js/autopilot.js"></script>
+<script src="../js/sim.js"></script>
+<script src="../js/skirmish.js"></script>
+<script src="../js/shipart.js"></script>
+<script src="../js/configurator.js"></script>
+<script>
+  const report = (s) => { const r = document.getElementById('report'); r.textContent += (r.textContent ? '\n' : '') + s; };
+  OD.Configurator.installSaved();
+  const yard = OD.Configurator.mount(document.getElementById('yard'), {
+    faction: 'JC',
+    onFly(design, scenario) {
+      const foes = scenario.ships.filter((s) => s.faction !== 'JC').map((s) => OD.Ships.CLASSES[s.cls].role).join(', ');
+      report('FLY · ' + design.name + ' saved and a trial scenario built: "' + scenario.name + '" against ' + foes + '. In the game this launches the skirmish; here it runs a ten-minute full-burn test flight instead.');
+      runTest(design);
+    },
+    onSave(design) { report('SAVED · ' + design.name + ' (' + design.id + ') · ' + design.blurb); },
+    onBack() { report('BACK pressed (the game returns to its menu).'); },
+  });
+  function runTest(design) {
+    const t = OD.Configurator.testFlight(design || yard.design(), 600);
+    if (!t) { report('No simulation module loaded.'); return; }
+    const f = OD.U.fmt;
+    report('TEST FLIGHT · ' + (design || yard.design()).name + ' · ' + Math.round(t.seconds) + ' s at full throttle in the real sim' +
+      '\n  propellant used   sim ' + f.mass(t.actual.propUsed) + '   yard ' + f.mass(t.predicted.propUsed) +
+      '\n  delta-v spent     sim ' + f.dv(t.actual.dv) + '   yard ' + f.dv(t.predicted.dv) + '   speed now ' + f.speed(t.actual.speed) +
+      '\n  heat sink load    sim ' + f.pct(t.actual.heatLoad) + '   yard ' + f.pct(t.predicted.heatLoad) + (t.regime === 'capped' ? '   (sink saturated: drive capped for the rest of the flight, as the yard warned)' : t.regime === 'cycling' ? '   (sink saturated: drive cycling on and off the cap, as the yard warned)' : '') +
+      '\n  delta-v left      sim ' + f.dv(t.actual.dvLeft) + '   full tanks ' + f.dv(t.predicted.dvFull) +
+      '\n  ' + (t.ok ? 'MATCH within ' + Math.round(t.off * 1000) / 10 + ' %: the yard\'s numbers are what the ship flies with.' : 'MISMATCH: ' + Math.round(t.off * 1000) / 10 + ' % off, more than the ' + Math.round(t.tol * 100) + ' % allowed.'));
+  }
+  function runChecks() {
+    const C = OD.Configurator, lines = [];
+    let fails = 0;
+    const check = (name, ok, detail) => { lines.push((ok ? '  ok   ' : '  FAIL ') + name + (detail ? '  ' + detail : '')); if (!ok) fails++; };
+    for (const base of C.BASES ? Object.keys(C.BASES) : []) {
+      const stock = OD.Ships.CLASSES[base], d = C.derive(C.presetParams(base), 'chk_' + base);
+      const same = ['length', 'dryMass', 'propMass', 'exhaustVelocity', 'thrust', 'angAccel', 'maxAngVel', 'reactorPower', 'idleHeat', 'driveHeat', 'sinkCapacity', 'radiatorArea', 'radiatorTemp', 'radiatorDeployTime'].filter((k) => Math.abs(d[k] - stock[k]) > Math.abs(stock[k]) * 1e-6 + 1e-9);
+      check(base + ': stock preset reproduces the class', same.length === 0 && JSON.stringify(d.armour) === JSON.stringify(stock.armour) && JSON.stringify(d.mounts) === JSON.stringify(stock.mounts), same.join(',') + (JSON.stringify(d.mounts) !== JSON.stringify(stock.mounts) ? ' mounts differ' : ''));
+      check(base + ': stock preset keeps the class doctrine', JSON.stringify(d.doctrine) === JSON.stringify(stock.doctrine), JSON.stringify(d.doctrine) + ' vs ' + JSON.stringify(stock.doctrine));
+      check(base + ': structure mass positive', d.masses.structure > 0, Math.round(d.masses.structure / 1e3) + ' t of ' + Math.round(stock.dryMass / 1e3));
+      check(base + ': cost matches the campaign', !C.BASES[base].cost || C.cost(d) === C.BASES[base].cost, C.cost(d) + ' vs ' + C.BASES[base].cost);
+      const a = C.analyse(d);
+      check(base + ': stock fit is flight-ready on power', !a.blocked, Math.round(a.power.ratio * 100) + ' % of reactor');
+    }
+    lines.push(fails ? fails + ' check(s) failed' : 'all checks passed');
+    report('CHECKS\n' + lines.join('\n'));
+    return fails;
+  }
+  document.getElementById('pvTest').addEventListener('click', () => runTest());
+  document.getElementById('pvChecks').addEventListener('click', runChecks);
+  document.getElementById('pvClear').addEventListener('click', () => { document.getElementById('report').textContent = ''; });
+  window.YardPreview = { yard, runChecks, runTest, loaded: true };
+</script>
+</body>
+</html>
