@@ -1622,7 +1622,7 @@
     if (!sol) return null;
     const left = bayCount(ship);
     let body =
-      'interceptor: ' + U.fmt.dv(sol.dv) + ' of its own delta-v (Tsiolkovsky, ' + rec.dryMass + ' kg dry on ' + rec.propMass + ' kg) at ' + U.fmt.num(rec.accel, 3) + ' m/s² off the rail and ' + U.fmt.num(sol.brakeAccel, 3) + ' m/s² on the brake, by which time it is nearly dry\n' +
+      'interceptor: ' + U.fmt.dv(sol.dv) + ' of its own delta-v (Tsiolkovsky, ' + rec.dryMass + ' kg dry, ' + rec.propMass + ' kg of propellant, ' + (rec.dryMass + rec.propMass) + ' kg off the rail) at ' + U.fmt.num(rec.accel, 3) + ' m/s² off the rail and ' + U.fmt.num(sol.brakeAccel, 3) + ' m/s² on the brake, by which time it is nearly dry\n' +
       'it builds ' + U.fmt.speed(sol.closing) + ' of closing, then brakes for ' + U.fmt.time(sol.tBrake) + ' over the last ' + U.fmt.dist(sol.dBrake) + ' and arrives at ' + U.fmt.speed(sol.terminal) + '\n' +
       'launch reach = burn + coast + brake inside ' + U.fmt.time(T.dartLife) + ' of endurance = ' + rangeWord(sol.reach) + ' (' + plural(left, 'interceptor') + ' aboard)\n' +
       'what it does on arrival is ½·m·v², and the m is its mass at contact, propellant included: ' +

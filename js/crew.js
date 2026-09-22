@@ -371,7 +371,8 @@
     if (!sim || !(dt > 0) || !Array.isArray(sim.ships)) return;
     for (const ship of sim.ships) {
       const cr = ship && ship.crew;
-      if (!cr || ship.destroyed) continue;
+      if (!cr) continue;
+      if (ship.destroyed) { lostWithShip(sim, ship, cr); continue; }
       cr._now = sim.time;
       gStep(ship, cr);
       hurtStep(sim, ship, cr, dt);
@@ -420,6 +421,26 @@
       cr._hurtAcc = 0;
       burstLine(sim, ship, cr); // the burn is back inside the couch limit: say what it cost
     }
+  }
+  // A hull that is gone takes her people with her. The record is settled once, on the first update
+  // after the loss, so the debrief and the campaign strike her off with the whole complement and
+  // not with the numbers she was carrying the second before. Her parties, her watches and her board
+  // stay silent, as they are for any destroyed hull.
+  function settleLoss(cr) {
+    if (cr._settled) return 0;
+    cr._settled = true;
+    const aboard = Math.max(0, Math.round((cr.fit || 0) + (cr.wounded || 0)));
+    cr.lost = Math.round(cr.lost || 0) + aboard;
+    cr.fit = 0; cr.wounded = 0;
+    cr._hurtAcc = 0; cr._casAcc = 0; cr._lostAcc = 0; cr._gLostAcc = 0; cr._burst = null; cr._cas = null;
+    return aboard;
+  }
+  function lostWithShip(sim, ship, cr) {
+    const aboard = settleLoss(cr);
+    if (aboard <= 0) return null;
+    const line = aboard >= cr.total ? aboard + ' lost with the ship.' : 'The ' + aboard + ' still aboard are lost with the ship.';
+    say(sim, ship, line, 'alert');
+    return line;
   }
   function burstLine(sim, ship, cr) {
     const b = cr._burst;
@@ -885,6 +906,7 @@
   function toRecord(ship) {
     const cr = ship && ship.crew;
     if (!cr) return null;
+    if (ship.destroyed) settleLoss(cr);   // struck off with everyone who was still aboard
     return { fit: Math.round(cr.fit), wounded: Math.round(cr.wounded), lost: Math.round(cr.lost), xp: clamp(Math.round(cr.xp || 0), 0, T.maxXp) };
   }
   // A record may be partial: story.js writes { xp: 1 } for a hull that has seen a fight and nothing

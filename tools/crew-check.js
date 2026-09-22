@@ -883,6 +883,41 @@ const near = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-6 : tol);
     /repair:drive/.test(pulls.drive) && /repair:reactor/.test(pulls.reactor) && /repair:tank1/.test(pulls.vent),
     [pulls.drive, pulls.reactor, pulls.vent].join(' / '));
 
+  // ------------------------------------------------------------------ a hull that is lost
+  // The module skips a destroyed hull, so her record used to freeze at the numbers of the second
+  // before and the debrief read "14 wounded, 6 lost" for a corvette lost with 24 aboard.
+  console.log('scenario: the hull is lost with her people aboard');
+  const lostAll = await page.evaluate(() => {
+    const whole = CC.ship('corvette'), sim = CC.sim([whole]);
+    whole.name = 'JCS Larkspur';
+    CC.run(sim, 5);
+    whole.destroyed = true;
+    CC.run(sim, 10);
+    const first = { crew: Object.assign({}, { fit: whole.crew.fit, wounded: whole.crew.wounded, lost: whole.crew.lost }), rec: OD.Crew.toRecord(whole), lines: sim.texts().filter((l) => /lost with the ship/.test(l)) };
+    CC.run(sim, 60);                      // and it is said once, not every pass
+    const again = sim.texts().filter((l) => /lost with the ship/.test(l)).length;
+    // a hull that had already lost people names the ones who were still aboard
+    const part = CC.ship('corvette'), partSim = CC.sim([part]);
+    part.name = 'JCS Tallow';
+    part.crew.fit = 18; part.crew.wounded = 2; part.crew.lost = 4;
+    CC.run(partSim, 5);
+    part.destroyed = true;
+    CC.run(partSim, 10);
+    const some = { crew: { fit: part.crew.fit, wounded: part.crew.wounded, lost: part.crew.lost }, rec: OD.Crew.toRecord(part), line: partSim.texts().filter((l) => /lost with the ship/.test(l))[0] || '' };
+    // a record taken before any update carries the settled numbers too
+    const cold = CC.ship('corvette');
+    cold.destroyed = true;
+    return { first, again, some, cold: OD.Crew.toRecord(cold) };
+  });
+  check('everyone still aboard is lost with the ship',
+    lostAll.first.crew.fit === 0 && lostAll.first.crew.wounded === 0 && lostAll.first.crew.lost === 24, JSON.stringify(lostAll.first.crew));
+  check('and the record the campaign strikes her off with carries it',
+    lostAll.first.rec.fit === 0 && lostAll.first.rec.wounded === 0 && lostAll.first.rec.lost === 24 && lostAll.cold.lost === 24, JSON.stringify(lostAll.first.rec));
+  check('one log line for the loss, said once',
+    lostAll.first.lines.length === 1 && lostAll.again === 1 && lostAll.first.lines[0] === 'Crew: JCS Larkspur — 24 lost with the ship.', lostAll.first.lines.join(' | '));
+  check('a hull that had already lost people names the ones still aboard',
+    lostAll.some.crew.lost === 24 && lostAll.some.rec.lost === 24 && lostAll.some.line === 'Crew: JCS Tallow — The 20 still aboard are lost with the ship.', lostAll.some.line);
+
   // ------------------------------------------------------------------ what the routine spends (CR 13, CR 14)
   // Chapter 4, 436 s: the routine put the sensor watch on a drive the ship was burning, for a mend
   // it could not start, and the watch ran at 70 % for two minutes. The bar it spends a watch by is

@@ -3692,7 +3692,7 @@ function note(text) { console.log('    ' + text); }
         const i = s1 ? s1.labels.findIndex((l) => /^Board her$/.test(l)) : -1;
         out.decks = { raised: !!d, card: s1, odds: B ? B.odds : null,
           theirs: foe.crew ? Math.round(foe.crew.fit) : null, ours: me.crew ? Math.round(me.crew.fit) : null,
-          says: i >= 0 ? /her \d+ fit against (our|.+’s) \d+: the party would be thrown back/.test(s1.details[i] || '') : false,
+          says: i >= 0 ? /her \d+ fit crew against (our|.+’s) \d+ throws the party back/.test(s1.details[i] || '') : false,
           unlit: i >= 0 ? s1.rec !== 'Board her' : false };
       }
     } catch (e) { out.err.push(String(e.stack || e)); }
@@ -3808,6 +3808,273 @@ function note(text) { console.log('    ' + text); }
     !!r3.decks && r3.decks.raised === true && r3.decks.says === true && r3.decks.unlit === true,
     JSON.stringify({ theirs: r3.decks && r3.decks.theirs, ours: r3.decks && r3.decks.ours, odds: r3.decks && r3.decks.odds }) +
     ' · ' + (r3.decks && r3.decks.card ? r3.decks.card.options.join(' | ') : 'never raised'));
+
+  // ------------------------------------------------------------------- the scan fixes (W1 to E3)
+  // Seven readings the scan found on cards that were otherwise right: a Why? paragraph that
+  // announced itself before it said anything, a boarding priced at a constant, a chapter with no
+  // hostile in it offering a fight, a card titled on a hull that was not hurt, a break-off that
+  // opened nothing and said so in metres a second, a radiator trade that never gave the panels
+  // back, and an approach rung flown against a hull that was outrunning it.
+  console.log('scenario: the scan fixes to the cards');
+  const scan = await page.evaluate(() => {
+    const out = { err: [] };
+    const D = OD.Decisions;
+    const build = (o) => { OD.harness.start(OD.Skirmish.build(Object.assign({ player: 'JC', env: 'deep', range: 400, seed: 5 }, o))); return OD.Game.sim; };
+    const find = (sim, kind, id) => (sim.decisions || []).find((x) => x.kind === kind && (x.ships || [x.shipId]).includes(id)) || null;
+    const raise = (sim, kind, id) => {
+      D.init(sim); D.update(sim, 0);
+      let d = find(sim, kind, id);
+      if (d) return d;
+      for (let i = 0; i < 14; i++) {
+        OD.harness.step(3);
+        d = find(sim, kind, id);
+        if (d) return d;
+        for (const x of (sim.decisions || []).slice()) if ((x.ships || [x.shipId]).includes(id) && x.kind !== kind) D.dismiss(sim, x.id);
+      }
+      return null;
+    };
+    const hurt = (sh, id, hp) => { const c = (sh.components || []).find((x) => x.id === id); if (c) { c.hp = hp; sh._dmgRev = (sh._dmgRev || 0) + 1; OD.Damage.aggregate(sh); } };
+    const shot = (d) => d && ({ title: d.title, text: d.text, teach: d.teach, rec: (d.options.find((o) => o.recommended) || {}).label || null,
+      labels: d.options.map((o) => o.label), details: d.options.map((o) => o.detail),
+      options: d.options.map((o) => o.key + ' ' + o.label + ' · ' + o.detail + (o.recommended ? ' [rec]' : '')) });
+    try {
+      // --- W4 + E3 + W1 + W5 read off one card: a hull above the hull line with a short clock
+      {
+        const sim = build({ range: 90, playerShips: { corvette: 1 }, enemyShips: { cruiser: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id); sim.setTarget(foe.id, me.id);
+        me.weaponsFree = true; foe.weaponsFree = true;
+        OD.Engagement.setFireMode(foe, 'full');
+        sim.setOrder(me.id, { type: 'keeprange', target: foe.id, range: 90e3 });
+        sim.setOrder(foe.id, { type: 'intercept', target: me.id });
+        let d = null, at = null;
+        for (let i = 0; i < 120 && !d; i++) {
+          OD.harness.step(3);
+          d = find(sim, 'withdraw', me.id);
+          if (d) { at = Math.round((me.hull != null ? me.hull : 1) * 1000) / 10; break; }
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'withdraw') D.dismiss(sim, x.id);
+          if (me.destroyed || me.disabled || (me.hull || 0) < 0.5) break;
+        }
+        const s1 = shot(d);
+        out.clock = { raised: !!d, hull: at, card: s1,
+          // W4: above the hull line the card is titled on the clock it prints, not on a hull that is not hurt.
+          clockTitle: s1 ? /armour lasts .+ at this fire\.$/.test(s1.title || '') : false,
+          hullTitle: s1 ? /down to \d+ % of (our|.+’s) hull/.test(s1.title || '') : false,
+          // W4: and the armour lesson keeps its half-gone sentence for a hull that has lost half.
+          half: s1 ? /With half of it gone/.test(s1.teach || '') : false,
+          // W1: no meta sentences, and every leftover reads as 'Key: sentence.'
+          meta: s1 ? /Each key holds|keys left out|also says/.test(s1.teach || '') : false,
+          behind: s1 && s1.teach ? (/(Break off[^:]*|Press on|Get behind [^:]+): [a-z0-9]/.test(s1.teach)) : false };
+      }
+      // --- E3: at full armour with nothing hit, being outnumbered is not this card's question
+      {
+        const sim = build({ range: 400, playerShips: { corvette: 1 }, enemyShips: { corvette: 3 } });
+        const me = sim.playerShips()[0];
+        OD.harness.select(me.id);
+        me.weaponsFree = true;
+        for (const h of sim.hostiles(me)) { h.weaponsFree = true; sim.setTarget(h.id, me.id); sim.setOrder(h.id, { type: 'intercept', target: me.id }); }
+        let seen = null;
+        for (let i = 0; i < 40 && !seen; i++) {
+          OD.harness.step(3);
+          const d = find(sim, 'withdraw', me.id);
+          if (d) { seen = { hull: Math.round((me.hull != null ? me.hull : 1) * 1000) / 10, title: d.title }; break; }
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'withdraw') D.dismiss(sim, x.id);
+        }
+        out.full = { raised: seen, hull: Math.round((me.hull != null ? me.hull : 1) * 1000) / 10 };
+      }
+      // --- W5: a pursuer who matches the whole burn
+      {
+        const sim = build({ range: 300, playerShips: { corvette: 1 }, enemyShips: { corvette: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id); me.weaponsFree = true; foe.weaponsFree = true;
+        sim.setOrder(foe.id, { type: 'intercept', target: me.id });
+        foe.target = me.id; foe.throttle = 1;
+        me.hull = 0.3;
+        let d = null;
+        for (let i = 0; i < 40 && !d; i++) {
+          OD.harness.step(4);
+          d = find(sim, 'withdraw', me.id);
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'withdraw') D.dismiss(sim, x.id);
+        }
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Break off/.test(l)) : -1;
+        out.matched = { raised: !!d, card: s1,
+          says: i >= 0 ? /^Break off: (she|.+) can match the burn$/.test(s1.labels[i]) : false,
+          keeps: i >= 0 ? /can match this burn, so the range only opens once her drive is hurt/.test(s1.details[i] || '') : false,
+          zero: i >= 0 ? /opening at 0(\.0+)? m\/s/.test(s1.details[i] || '') : false,
+          unlit: i >= 0 ? s1.rec !== s1.labels[i] : false };
+      }
+      // --- W2: the crossing is the decks' own, and a boarding they throw back says so
+      for (const job of [{ key: 'even', foe: 'corvette' }, { key: 'odds', foe: 'cruiser' }]) {
+        const ships = {}; ships[job.foe] = 1;
+        const sim = build({ range: 60, playerShips: { corvette: 1 }, enemyShips: ships });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id);
+        foe.systems.drive = 0.05; foe.disabled = false;
+        const d = raise(sim, 'cripple', me.id);
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Board her$/.test(l)) : -1;
+        const plan = OD.Sim && typeof OD.Sim.boardingPlan === 'function' ? OD.Sim.boardingPlan(me, foe) : null;
+        out[job.key] = { raised: !!d, card: s1, plan: plan ? { time: Math.round(plan.time), thrownBack: plan.thrownBack } : null,
+          // the key prices the crossing the sim charges, not the constant
+          held: i >= 0 ? (/ hold ([^·]+) inside /.exec(s1.details[i] || '') || [null, null])[1] : null,
+          teach: s1 ? /90 s against a crew the size of ours, longer against a bigger one/.test(s1.teach || '') : false,
+          unlit: i >= 0 ? s1.rec !== 'Board her' : false };
+      }
+      // --- W3: chapter 1 has nothing hostile in it, so the key offers no fight
+      {
+        OD.harness.start(0);
+        const sim = OD.Game.sim;
+        OD.harness.select('larkspur');
+        const me = sim.byId('larkspur');
+        sim.setTarget('larkspur', 'meridian');
+        sim.setOrder('larkspur', { type: 'intercept', target: 'meridian' });
+        let d = null;
+        for (let i = 0; i < 60 && !d; i++) { OD.harness.step(5); d = find(sim, 'burn', 'larkspur'); }
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Hold/.test(l)) : -1;
+        out.quiet = { raised: !!d, card: s1, hostiles: sim.hostiles(me).length,
+          label: i >= 0 ? s1.labels[i] : null,
+          fight: i >= 0 ? /fight/.test(s1.labels[i] + ' ' + (s1.details[i] || '')) : false,
+          parties: i >= 0 ? /the parties keep working/.test(s1.details[i] || '') : false,
+          costs: i >= 0 ? /(comes down in|alongside in)/.test(s1.details[i] || '') : false };
+      }
+      // --- R1: the trade gives the panels back, and prices the stow at the order's throttle
+      {
+        const sim = build({ range: 900, playerShips: { corvette: 1 }, enemyShips: { corvette: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id);
+        sim.setOrder(me.id, { type: 'intercept', target: foe.id });
+        if (me.crew) me.crew.auto = false;
+        sim.setRadiators(me.id, 'auto');
+        const was = { auto: me.radiators.auto, deployed: me.radiators.deployed };
+        for (let i = 0; i < 3; i++) OD.harness.step(3);
+        hurt(me, 'rad1', 0.25);
+        const d = raise(sim, 'repair', me.id);
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Stow the panels/.test(l)) : -1;
+        // The forecast is read against the two throttles by hand: the coast the key used to price,
+        // and the burn the order will actually hold.
+        const cap = me.sinkCapacity;
+        const secs = 240;
+        const load = (thr) => {
+          const sys = me.systems && me.systems.drive != null ? me.systems.drive : 1;
+          const heatIn = Math.max(0, (me.idleHeat || 0) + (thr > 0 ? (me.driveHeat || 0) * thr * sys : 0) + (me.extraHeat || 0));
+          return Math.round(((me.heat + heatIn * secs) / cap) * 100);
+        };
+        const printed = i >= 0 ? (/to about (\d+) %/.exec(s1.details[i] || '') || [null, null])[1] : null;
+        out.trade = { raised: !!d, card: s1, was, order: me.order.type,
+          printed: printed != null ? +printed : null, atBurn: load(1), atCoast: load(0) };
+        if (i >= 0) {
+          const n = (sim.log || []).length;
+          D.choose(sim, d.id, d.options[i].key);
+          out.trade.stowed = { auto: me.radiators.auto, deployed: me.radiators.deployed };
+          const pty = OD.Crew.board(me).parties.find((p) => p.task === 'repair');
+          if (pty) OD.Crew.release(me, pty.id);
+          OD.harness.step(3);
+          out.trade.back = { auto: me.radiators.auto, deployed: me.radiators.deployed,
+            lines: (sim.log || []).slice(n).map((l) => l.text || l.message || String(l)).filter((t) => /radiators/i.test(t)) };
+        }
+      }
+      // --- R2: an approach rung against a hull outrunning it
+      {
+        const sim = build({ range: 1500, playerShips: { corvette: 1 }, enemyShips: { corvette: 1 } });
+        const me = sim.playerShips()[0], foe = sim.hostiles(me)[0];
+        OD.harness.select(me.id);
+        sim.setTarget(me.id, foe.id);
+        me.propMass = me.fullPropMass;
+        foe.propMass = Math.max(1, foe.fullPropMass * 0.02);
+        const away = Math.atan2(foe.pos.y - me.pos.y, foe.pos.x - me.pos.x);
+        const dir = { x: Math.cos(away), y: Math.sin(away) };
+        const run = () => {
+          foe.cmdHeading = away; foe.heading = away; foe.angVel = 0;
+          foe.cmdThrottle = 1; foe.throttle = 1; foe.order = { type: 'hold' };
+          foe.vel = { x: dir.x * 4000, y: dir.y * 4000 };
+          me.vel = { x: 0, y: 0 };
+        };
+        for (let i = 0; i < 20; i++) { run(); OD.harness.step(3); }
+        run();
+        D.init(sim); D.update(sim, 0);
+        let d = find(sim, 'approach', me.id);
+        for (let i = 0; i < 12 && !d; i++) {
+          run(); OD.harness.step(3);
+          d = find(sim, 'approach', me.id);
+          for (const x of (sim.decisions || []).slice()) if (x.kind !== 'approach') D.dismiss(sim, x.id);
+        }
+        const s1 = shot(d);
+        const i = s1 ? s1.labels.findIndex((l) => /^Burn hard$/.test(l)) : -1;
+        out.outrun = { raised: !!d, card: s1,
+          mine: Math.round(me.accel() * 10) / 10, hers: Math.round(foe.accel() * 10) / 10,
+          says: i >= 0 ? /she outruns us, and the range opens at /.test(s1.details[i] || '') : false,
+          promise: i >= 0 ? /alongside in /.test(s1.details[i] || '') : false };
+      }
+    } catch (e) { out.err.push(String(e.stack || e)); }
+    out.errors = OD.errors.slice();
+    return out;
+  });
+  check('no errors while the scan fixes are exercised', scan.err.length === 0 && scan.errors.length === 0,
+    scan.err.concat(scan.errors).join(' | '));
+  // W4: 'We are down to 100 % of our hull' on a hull nothing had touched.
+  check('above the hull line the card is titled on the armour clock it prints',
+    !!scan.clock && scan.clock.raised === true && scan.clock.hull > 80 &&
+    scan.clock.clockTitle === true && scan.clock.hullTitle === false,
+    JSON.stringify({ hull: scan.clock && scan.clock.hull, title: scan.clock && scan.clock.card && scan.clock.card.title }));
+  check('and the armour lesson keeps its half-gone sentence for a hull that has lost half',
+    !!scan.clock && scan.clock.half === false && !!scan.matched && scan.matched.raised === true &&
+    /With half of it gone/.test((scan.matched.card && scan.matched.card.teach) || ''),
+    JSON.stringify({ atFull: scan.clock && scan.clock.half, atThirty: !!scan.matched && /With half of it gone/.test((scan.matched.card && scan.matched.card.teach) || '') }));
+  // W1: 'Each key holds three clauses. Here is what the keys left out.' before it said anything.
+  check('the Why? paragraph reads the keys' + '’' + ' own words, with no paragraph about paragraphs',
+    !!scan.clock && scan.clock.meta === false && scan.clock.behind === true,
+    (scan.clock && scan.clock.card ? scan.clock.card.teach : 'never raised'));
+  // E3: chapter 4 put it on every hull at 279 s at 100.0 % with nothing hit.
+  check('a hull at full armour with nothing hit is not asked whether to break off',
+    !!scan.full && scan.full.raised === null && scan.full.hull > 90,
+    JSON.stringify(scan.full));
+  // W5: 'opening at 0 m/s' as though that were a result.
+  check('a break-off that opens nothing says so on the key, and is never the pick',
+    !!scan.matched && scan.matched.raised === true && scan.matched.says === true &&
+    scan.matched.keeps === true && scan.matched.zero === false && scan.matched.unlit === true,
+    (scan.matched && scan.matched.card ? scan.matched.card.options.join(' | ') : 'never raised'));
+  if (scan.matched && scan.matched.card) note(scan.matched.card.title + ' — ' + scan.matched.card.text + '\n    ' + scan.matched.card.options.join('\n    '));
+  // W2: 'hold 1m 30s' was the constant, whoever was aboard her.
+  check('the boarding key prices the crossing the sim charges, not the constant',
+    !!scan.even && !!scan.odds && scan.even.held === '1m 30s' && scan.odds.held === '6m 00s' &&
+    !!scan.odds.plan && scan.odds.plan.time === 360,
+    JSON.stringify({ even: scan.even && scan.even.held, odds: scan.odds && scan.odds.held, plan: scan.odds && scan.odds.plan }));
+  check('and the lesson says what the crossing depends on',
+    !!scan.even && scan.even.teach === true && scan.odds.unlit === true,
+    (scan.even && scan.even.card ? scan.even.card.teach : 'never raised'));
+  // W3: 'Hold and fight at this range' with nothing hostile in the sim.
+  check('with no hostile in the sim the burn card offers no fight',
+    !!scan.quiet && scan.quiet.raised === true && scan.quiet.hostiles === 0 &&
+    scan.quiet.label === 'Hold this range' && scan.quiet.fight === false &&
+    scan.quiet.parties === false && scan.quiet.costs === true,
+    JSON.stringify({ hostiles: scan.quiet && scan.quiet.hostiles, label: scan.quiet && scan.quiet.label }) + ' · ' +
+    (scan.quiet && scan.quiet.card ? scan.quiet.card.options.join(' | ') : 'never raised'));
+  if (scan.quiet && scan.quiet.card) note(scan.quiet.card.title + ' — ' + scan.quiet.card.text + '\n    ' + scan.quiet.card.options.join('\n    '));
+  // R1: the mend landed, the log said the radiators were out again, and the panels stayed in.
+  check('the panels the trade stowed are out again when the party comes off',
+    !!scan.trade && scan.trade.raised === true && !!scan.trade.stowed && scan.trade.stowed.deployed === false &&
+    !!scan.trade.back && scan.trade.back.deployed === true && scan.trade.back.auto === true &&
+    (scan.trade.back.lines || []).some((t) => /The radiators are out again, and back on automatic\./.test(t)),
+    JSON.stringify(scan.trade && scan.trade.back));
+  // R1: the forecast priced the coast while the autopilot was burning.
+  check('and the stow is forecast at the throttle the order will hold',
+    !!scan.trade && scan.trade.order === 'intercept' && scan.trade.printed != null &&
+    Math.abs(scan.trade.printed - scan.trade.atBurn) <= 3 && scan.trade.atBurn - scan.trade.atCoast > 10,
+    JSON.stringify({ printed: scan.trade && scan.trade.printed, atBurn: scan.trade && scan.trade.atBurn, atCoast: scan.trade && scan.trade.atCoast }));
+  // R2: 'Burn hard · alongside in 25m 47s' against a hull making 17.3 m/s² to our 13.0.
+  check('an approach rung against a hull that outruns us promises no arrival',
+    !!scan.outrun && scan.outrun.raised === true && scan.outrun.hers > scan.outrun.mine &&
+    scan.outrun.says === true && scan.outrun.promise === false,
+    JSON.stringify({ mine: scan.outrun && scan.outrun.mine, hers: scan.outrun && scan.outrun.hers }) + ' · ' +
+    (scan.outrun && scan.outrun.card ? scan.outrun.card.details[0] : 'never raised'));
+  if (scan.outrun && scan.outrun.card) note(scan.outrun.card.title + ' — ' + scan.outrun.card.text + '\n    ' + scan.outrun.card.options.join('\n    '));
 
   // ---------------------------------------------------------------- the chapters the loop is for
   // The fun and engagement reviewers played chapters 2 to 8 on the recommended pick and found the

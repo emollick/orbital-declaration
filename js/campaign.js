@@ -231,14 +231,15 @@
     for (const r of [110, 190, 270]) { ctx.beginPath(); ctx.arc(jx, jy, r, 0, U.TAU); ctx.stroke(); }
     const pos = (n) => ({ x: n.x * w, y: n.y * h });
     const colour = (o) => o === 'JC' ? '#4fd1c5' : o === 'ISA' ? '#f0a04b' : '#8f9bad';
-    // edges
+    // edges; the costs of the routes open this turn are drawn after the nodes, so a node never sits on one
+    const costs = [];
     ctx.font = '10px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
     for (const [a, b, dv] of EDGES) {
       const pa = pos(node(a)), pb = pos(node(b));
       const adj = a === state.fleetAt || b === state.fleetAt;
       ctx.strokeStyle = adj ? 'rgba(79,209,197,0.55)' : 'rgba(127,142,163,0.25)'; ctx.lineWidth = adj ? 1.5 : 1;
       ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
-      if (adj) { ctx.fillStyle = 'rgba(215,224,234,0.8)'; ctx.fillText(dv.toFixed(1) + ' km/s', (pa.x + pb.x) / 2, (pa.y + pb.y) / 2 - 4); }
+      if (adj) costs.push({ pa, pb, dv });
     }
     // nodes
     for (const n of NODES) {
@@ -256,6 +257,21 @@
         ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(p.x, p.y, 16, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = '#ffffff'; ctx.font = '10px "IBM Plex Mono", monospace'; ctx.fillText('FLEET', p.x, p.y + 30);
       }
+    }
+    // route costs, on the map's own ground so they read over a line, slid along the edge when a node is under them
+    ctx.font = '10px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
+    for (const c of costs) {
+      const label = c.dv.toFixed(1) + ' km/s';
+      const ex = c.pb.x - c.pa.x, ey = c.pb.y - c.pa.y, len = Math.hypot(ex, ey) || 1;
+      let f = 0.5, lx = (c.pa.x + c.pb.x) / 2, ly = (c.pa.y + c.pb.y) / 2;
+      for (let k = 0; k < 8; k++) {
+        const near = NODES.some((n) => { const q = pos(n); return Math.hypot(q.x - lx, q.y - ly) < 22; });
+        if (!near) break;
+        f += (k % 2 ? -1 : 1) * (k + 1) * 14 / len; lx = c.pa.x + ex * f; ly = c.pa.y + ey * f;
+      }
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(8,12,18,0.85)'; ctx.fillRect(lx - tw / 2 - 3, ly - 13, tw + 6, 12);
+      ctx.fillStyle = 'rgba(215,224,234,0.85)'; ctx.fillText(label, lx, ly - 4);
     }
   }
 

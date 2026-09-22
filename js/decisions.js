@@ -89,6 +89,8 @@
     panelGrace: 60,       // s: one kind owns the panels at a time, and this is how long it holds them
     defendGrace: 60,      // s after a question about closing on her is answered before defend speaks
     withdrawHull: 0.5,    // hull fraction at which a hull is asked whether to stay in the fight
+    withdrawFull: 0.8,    // hull fraction above which only a short armour clock is a question
+    withdrawClock: 180,   // s of armour left that makes a hull above that fraction a question
     withdrawClear: 0.62,  // and above which the question has answered itself
     winning: 2.5,         // our fighting weight over theirs above which the fight is nearly won
     breakOpen: 1.25,      // x her burn-through we want to be outside once we have broken off
@@ -587,16 +589,35 @@
       odds: B && B.odds > 0 ? B.odds : 0,
     };
   }
-  // Whether the decks decide it before the party does. sim.js throws a boarding party back when
-  // the defenders are more than BOARD.odds fit to one of ours, and that hull cannot be tried again
-  // for ten minutes, so a card that recommends the run is recommending casualties. The same two
-  // numbers the sim uses; with either crew unknown there is nothing to say.
-  function boardOdds(ship, target) {
-    const k = boardNumbers().odds;
+  // What the sim charges for a boarding: how long the party is across, and whether the decks throw
+  // it back. OD.Sim.boardingPlan is the one place that arithmetic lives, so the card, the tips and
+  // the log all read the same numbers; without it the module falls back on the constants.
+  function boardPlan(ship, target) {
+    const B = boardNumbers();
+    const S = OD.Sim;
+    if (S && typeof S.boardingPlan === 'function') {
+      try {
+        const pl = S.boardingPlan(ship, target);
+        if (pl && pl.time > 0) return pl;
+      } catch (e) { /* fall through to the constants */ }
+    }
     const ours = ship && ship.crew && ship.crew.fit > 0 ? Math.round(ship.crew.fit) : 0;
     const theirs = target && target.crew && target.crew.fit > 0 ? Math.round(target.crew.fit) : 0;
-    if (!(k > 0) || !(ours > 0) || !(theirs > 0)) return null;
-    return { ours, theirs, beaten: theirs > k * ours };
+    const known = ours > 0 && theirs > 0;
+    return {
+      time: B.time * (known ? U.clamp(theirs / ours, 0.5, 4) : 1),
+      thrownBack: known && B.odds > 0 && theirs > B.odds * ours,
+      ours, theirs, known,
+    };
+  }
+  // Whether the decks decide it before the party does. sim.js throws a boarding party back when
+  // the defenders are more than BOARD.odds fit to one of ours, and that hull cannot be tried again
+  // for ten minutes, so a card that recommends the run is recommending casualties. One source: the
+  // plan above. With either crew unknown there is nothing to say.
+  function boardOdds(ship, target) {
+    const pl = boardPlan(ship, target);
+    if (!pl.known) return null;
+    return { ours: Math.round(pl.ours), theirs: Math.round(pl.theirs), beaten: !!pl.thrownBack };
   }
   // The panels' ceiling with them fully out: what they would shed with the sink hot, which is both
   // the price of extending them and the budget every forecast is run against. ship.radiatorRating()
@@ -1227,13 +1248,23 @@
     const first = said.split(/\.(?:\s|$)/)[0].trim();
     return first.charAt(0).toLowerCase() + first.slice(1);
   }
+  // The throttle the order the ship is flying will hold, not the one this instant caught. An
+  // intercept or an approach exists to close, so it burns; the autopilot's coast leg reads zero on
+  // ship.throttle and priced a four-minute stow at the quiet minute in the middle of a burn. A
+  // keeprange hull already on station really is coasting, so that one is read off the throttle.
+  function orderThrottle(ship) {
+    if (!ship) return 0;
+    const o = ship.order || {};
+    if (o.type === 'intercept' || o.type === 'approach') return 1;
+    return U.clamp(Math.max(ship.throttle || 0, ship.cmdThrottle || 0), 0, 1);
+  }
   // Where the sink ends up over a repair made with the radiators in: what stowing them costs, in
-  // the quantity the heat box uses.
+  // the quantity the heat box uses, at the throttle the order will hold while the party works.
   function sinkAfterStow(ship, secs) {
     const cap = ship && ship.sinkCapacity > 0 ? ship.sinkCapacity : 0;
     if (!(cap > 0) || !(secs > 0)) return null;
     const heat = U.clamp(ship.heat || 0, 0, cap);
-    return U.clamp((heat + heatInOf(ship) * secs) / cap, 0, 1);
+    return U.clamp((heat + heatAtThrottle(ship, orderThrottle(ship), 0) * secs) / cap, 0, 1);
   }
   // With no board row to read — an older damage module, or a part the report does not carry — the
   // card falls back on the cap the mend reaches.
@@ -1475,9 +1506,20 @@
       } else {
         const r = sh.radiators;
         if (!r || !rec.was || r.auto !== false || r.deployed !== false) continue;
-        if (typeof sim.setRadiators === 'function') sim.setRadiators(id, rec.was.auto ? 'auto' : !!rec.was.deployed);
-        else { r.auto = !!rec.was.auto; r.deployed = !!rec.was.deployed; }
-        say(at + (rec.was.auto || rec.was.deployed ? 'The radiators are out again.' : 'The radiators stay in.'));
+        // 'auto' is a flag, not a state: the automatic rule runs under the computer's think, so a
+        // hull the player is flying kept the flag and left the panels stowed. The trade took both
+        // away, so both go back — the flag and the panels as they stood when it was taken.
+        if (typeof sim.setRadiators === 'function') {
+          sim.setRadiators(id, rec.was.auto ? 'auto' : !!rec.was.deployed);
+          if (rec.was.auto) {
+            const back = sim.byId(id);
+            if (back && back.radiators) back.radiators.deployed = !!rec.was.deployed;
+          }
+        } else { r.auto = !!rec.was.auto; r.deployed = !!rec.was.deployed; }
+        // What went back, named: the panels, and whether the ship is running them again herself.
+        say(at + (rec.was.deployed
+          ? (rec.was.auto ? 'The radiators are out again, and back on automatic.' : 'The radiators are out again.')
+          : (rec.was.auto ? 'The radiators stay in, and back on automatic.' : 'The radiators stay in.')));
       }
     }
   }
@@ -1606,6 +1648,10 @@
   }
 
   // ---- the teaching paragraphs -----------------------------------------------------------------
+  // The one sentence in the withdraw lesson that is about armour already gone. On a hull still
+  // above half it is a sentence about somebody else's ship, and the card was printing it under
+  // the title at 100 %, so it is composed in and taken back out by teachOf below.
+  const WITHDRAW_HALF = 'With half of it gone every hit lands deeper than the last. ';
   const TEACH = {
     approach: 'Getting to a fight costs propellant and shows you to the other side. Burn hard and you arrive ' +
       'soonest. The drive is lit the whole way, and a plume is a firing solution for every hostile that can see ' +
@@ -1628,9 +1674,10 @@
       'time puts the rest of it aboard. A smaller salvo is spent for nothing. Every one you launch is one you do ' +
       'not have in the next fight.',
     cripple: 'A ship with no drive cannot manoeuvre or run. Board her and the hull and crew are yours. That ' +
-      'means matching her speed and holding station inside 3 km for 90 s. Finishing her off with full fire is ' +
-      'quicker, and it leaves no prize to take home. Boarding holds you still for the whole 90 s. That is ' +
-      'dangerous while anything else on her side is shooting.',
+      'means matching her speed and holding station inside 3 km: 90 s against a crew the size of ours, longer ' +
+      'against a bigger one. Finishing her off with full fire is quicker, and it leaves no prize to take home. ' +
+      'Boarding holds you still for the whole crossing. That is dangerous while anything else on her side is ' +
+      'shooting.',
     slugs: 'A coilgun slug is a lump of metal thrown at where you will be, and nothing steers it after that. Move ' +
       'a few ship lengths before it arrives and it passes into empty space. Jinking does that for you. It is a ' +
       'run of small random burns across her line of fire, and every dodge costs propellant. Holding still keeps ' +
@@ -1644,8 +1691,8 @@
       'objective. Close on the attacker and kill her, and the shooting stops for good. That takes as long as ' +
       'the range takes to fly. Sit alongside the ship being shot at instead and your point defence covers her. ' +
       'That stops what is already in flight. Holding your station does neither.',
-    withdraw: 'Armour is what keeps a hit out of the hull. With half of it gone every hit lands deeper than the ' +
-      'last. Breaking off is one burn and then a coast, and outside her reach her beams do nothing. ' +
+    withdraw: 'Armour is what keeps a hit out of the hull. ' + WITHDRAW_HALF +
+      'Breaking off is one burn and then a coast, and outside her reach her beams do nothing. ' +
       'Getting behind a sister ship puts her point defence over you and her armour between you and the shooting. ' +
       'Staying in it is right when the fight is nearly over.',
     sink: 'Every joule the ship makes goes into the heat sink. A full sink holds the drive to a quarter and ' +
@@ -1699,6 +1746,11 @@
     return 'A repair in vacuum is a jury-rig: ' + name + ' comes back to ' + pct(cap) + ', never further.';
   }
   function teachOf(kind, ship, partId) {
+    // Half the armour gone is what makes the armour sentence true. Above that line the card is
+    // raised on the clock, and the lesson is read without it.
+    if (kind === 'withdraw' && (ship && ship.hull != null ? ship.hull : 1) > 0.5) {
+      return TEACH.withdraw.split(WITHDRAW_HALF).join('');
+    }
     if (kind === 'repair') {
       const said = teachCase(ship, partId);
       if (said) return said;
@@ -2158,13 +2210,34 @@
     const opts = [];
     const shown = list.slice(0, 3).map((o) => headOf(o.detail || ''));
     const behind = [];
+    // The card's own head: its title and its sentence. A leftover clause either of them already
+    // carries is not worth reading again, in the words or in the numbers. The withdraw card put
+    // '68 % of hull left' behind the Why? key under the title 'We are down to 68 % of our hull',
+    // which is the same fact twice in two shapes, so the numbers are compared as well as the text.
+    const head = String(d.title || '') + ' ' + String(d.text || '');
+    const numsOf = (t) => (String(t).replace(/(\d)[\s\u00a0\u202f](?=\d)/g, '$1').match(/\d+(?:\.\d+)?/g) || []);
+    const headNums = numsOf(head);
+    const carried = (c) => {
+      if (head.indexOf(c) >= 0) return true;
+      const ns = numsOf(c);
+      return ns.length > 0 && ns.every((n) => headNums.indexOf(n) >= 0);
+    };
+    // A clause read on its own is a sentence, not an item in a list: the first one runs on from
+    // the key's label, the rest stand by themselves.
+    const sentences = (cs) => cs.map((c, i) => {
+      const t = String(c).trim();
+      const w = i > 0 ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+      return /[.!?]$/.test(w) ? w : w + '.';
+    }).join(' ');
     for (let i = 0; i < list.length && i < 3; i++) {
       const full = list[i].detail || '';
-      // A clause that is already on another key, or in the card's own sentence, is not worth
-      // repeating behind the Why? key: it was cut because there was no room for it, not because
-      // the player has not read it.
-      const rest = clausesOf(tailOf(full)).filter((c) => shown.every((h) => h.indexOf(c) < 0) && String(d.text || '').indexOf(c) < 0);
-      if (rest.length) behind.push(list[i].label + ' also says ' + rest.join(DOT) + '.');
+      // A clause that is already on another key, or in the card's own title or sentence, is not
+      // worth repeating behind the Why? key: it was cut because there was no room for it, not
+      // because the player has not read it.
+      const rest = clausesOf(tailOf(full)).filter((c) => shown.every((h) => h.indexOf(c) < 0) && !carried(c));
+      // The key's name, not the whole label: a label that already carries a clause of its own
+      // ('Break off: she can match the burn') would put two colons in one line.
+      if (rest.length) behind.push(String(list[i].label).split(': ')[0] + ': ' + sentences(rest));
       opts.push({
         key: String(i + 1), id: list[i].id || 'o' + (i + 1),
         label: list[i].label, detail: headOf(full), more: rest.join(DOT),
@@ -2172,9 +2245,9 @@
       });
     }
     // Three clauses is what a key holds. What would not fit is read here, behind the Why? key,
-    // under the paragraph that teaches the kind.
-    d.teach = behind.length ? (d._teach ? d._teach + ' ' : '') +
-      'Each key holds three clauses. Here is what the keys left out. ' + behind.join(' ') : d._teach || '';
+    // under the paragraph that teaches the kind. The paragraph said so out loud twice before it
+    // said anything; a reader who has opened Why? can see that these are the keys' own words.
+    d.teach = behind.length ? (d._teach ? d._teach + ' ' : '') + behind.join(' ') : d._teach || '';
     const was = d.options || [];
     let moved = was.length !== opts.length;
     for (let i = 0; i < opts.length && !moved; i++) moved = was[i].label !== opts[i].label || was[i].recommended !== opts[i].recommended;
@@ -2683,6 +2756,14 @@
     const hard = { type: 'keeprange', target: target.id, range: standoff };
     const fast = closeCost(ship, gap, closing, null);
     const slow = closeCost(ship, Math.max(0, R - hold), closing, T.coastSpeed);
+    // closeCost is a brachistochrone over the gap as it stands, and a gap that is opening is not a
+    // gap you fly. Chapter 5's card read 'Burn hard · alongside in 25m 47s · Δv 19.9 km/s' against a
+    // hull making 17.3 m/s² to our 13.0, so the range opened for the whole burn. The burn card's
+    // rungs already price this on the target's own motion, and this is the same rung: where she
+    // outruns us the key prints what the burn does to the range, in the same words, and promises
+    // no arrival at all.
+    const hardRung = rungFor(sim, ship, target, gap, closing, ship.accel());
+    const outrun = !!(hardRung && hardRung.never);
     // What she reads of us on the way in, priced with the radiators as they will actually be. The
     // panels are not a constant: they glow with the sink behind them, so a hull coasting on a
     // filling sink is brighter at the end of the leg than it is at the start, and the cold-hull
@@ -2718,7 +2799,7 @@
       {
         id: 'burn',
         label: 'Burn hard',
-        detail: withNum('alongside in ' + maybe(view, time(fast.t)) + ' · ' + dv(fast.dv, !view.solution) +
+        detail: withNum((outrun ? arriveWords(hardRung) : 'alongside in ' + maybe(view, time(fast.t))) + ' · ' + dv(fast.dv, !view.solution) +
           ' · the drive burns the whole way, so every hostile holds a solution on ' + V.us, kmSay(view, gap) + ' to cover'),
         recommended: rush || saving < T.minBenefit,
         burns: true,
@@ -2731,8 +2812,9 @@
         // firing solution for everyone in the engagement, and the quiet only starts when it stops.
         detail: withNum(maybe(view, time(slow.burn)) + ' of burn, and they hold a solution while it lasts · then dark for ' +
           maybe(view, time(slow.coast)) + ' · ' + dv(slow.dv, !view.solution) + ' · ' + quiet +
-          (plan.fits ? ' · brake at ' + km(brakeAt) + ', alongside at ' + km(hold) : ' · settling at ' + km(standoff)) +
-          ' in ' + maybe(view, time(slow.t)),
+          (outrun ? ' · this coast never closes the range'
+            : (plan.fits ? ' · brake at ' + km(brakeAt) + ', alongside at ' + km(hold) : ' · settling at ' + km(standoff)) +
+              ' in ' + maybe(view, time(slow.t))),
           kmSay(view, gap) + ' to cover'),
         recommended: !rush && saving >= T.minBenefit,
         benefit: saving,
@@ -3672,7 +3754,11 @@
     // prize the card recommended for three minutes while the range went 281 → 293 km and the hull
     // 0.50 → 0.19 was not a prize, it was the rest of her squadron shooting at a stationary
     // target. While anything of hers is still shooting, the whole run has to fit in the window.
-    const run = p.t != null ? p.t + B.time : null;
+    // The crossing is not a constant: the sim charges 90 s against a crew our own size and longer
+    // against a bigger one, so the key prices the crossing this hull would actually make.
+    const plan = boardPlan(ship, target);
+    const cross = plan.time;
+    const run = p.t != null ? p.t + cross : null;
     const inTime = theirs === 0 || (run != null && run <= T.boardWindow);
     const view = trackRange(sim, ship, target);
     // The decks, before the run: too many fit aboard her and the party is thrown back.
@@ -3681,11 +3767,11 @@
       {
         id: 'board',
         label: 'Board her',
-        detail: withNum('alongside in ' + maybe(view, time(p.t)) + ' · hold ' + time(B.time) + ' inside ' + km(B.range) + ' at under ' + Math.round(B.speed) +
+        detail: withNum('alongside in ' + maybe(view, time(p.t)) + ' · hold ' + time(cross) + ' inside ' + km(B.range) + ' at under ' + Math.round(B.speed) +
           V.say(' m/s and the hull and crew are ours', ' m/s and the hull and crew are ' + V.name + '\u2019s') +
           (decks && decks.beaten
-            ? ' · her ' + decks.theirs + ' fit against ' + V.say('our ', V.name + '\u2019s ') + decks.ours +
-              ': the party would be thrown back'
+            ? ' · her ' + decks.theirs + ' fit crew against ' + V.say('our ', V.name + '\u2019s ') + decks.ours +
+              ' throws the party back'
             : swarmed ? ' · ' + count(theirs) + ' of hers are still shooting against ' + count(ours) +
               V.say(' of ours, and we sit still for all of it', ' of ' + V.name + '\u2019s, and she sits still for all of it')
               : !inTime ? ' · ' + maybe(view, time(run)) + ' of it with ' + count(theirs) + ' of hers still shooting' : ''),
@@ -4667,12 +4753,19 @@
     const fire = underFire(sim, ship) || !!boarder;
     const trapped = odds.trapped && (fire || closingOn(ship, foe) > 10);
     if (hull > T.withdrawHull && !soon && !trapped) return null;
+    // E3: at 100.0 % of her armour with nothing hit, 'should we break off?' is a question about
+    // nothing. Chapter 4 put it on every hull at 279 s and lit 'Break off and open' at 349 s, and
+    // the retreat under fire is the ch4 1s 10s loss. Above withdrawFull the only thing worth
+    // asking about is the armour, and only while the clock the card prints is short: the arithmetic
+    // of being outnumbered is the range card's and the escort card's question at that hull.
+    if (hull > T.withdrawFull && !(soon && clock.life != null && clock.life < T.withdrawClock)) return null;
     if (!fire && !(closingOn(ship, foe) > 10)) return null;
     const id = foe.id;
     const hurt = hull <= T.withdrawHull || soon;
     const atBoarder = boarder ? rangeSay(trackRange(sim, ship, boarder)) : '';
     const atFoe = rangeSay(trackRange(sim, ship, foe));
-    const held = time(boardNumbers().time);
+    // Her party crossing to us, priced the way the sim charges it: her decks against ours.
+    const held = time(boardPlan(boarder || foe, ship).time);
     return {
       target: foe,
       // Every number in the title is read off the hull as the card is drawn: an armour figure
@@ -4685,6 +4778,16 @@
         const bd = (sm ? boardingUs(sm, me) : null) || boarder;
         if (bd) return bd.name + ' is coming alongside to board ' + V.us + '.';
         if (hurt || h2 <= T.withdrawHull) {
+          // Above the hull line the card is raised on the armour clock, not on the hull: at 100 %
+          // of her armour 'We are down to 100 % of our hull' reads as a misprint. Title the clock
+          // the card is actually about, which the first key already prints.
+          if (h2 > T.withdrawHull) {
+            const lf = sm ? hullLife(sm, me).life : null;
+            if (lf != null) {
+              return V.say('Our armour lasts ' + time(lf) + ' at this fire.',
+                V.name + '\u2019s armour lasts ' + time(lf) + ' at this fire.');
+            }
+          }
           return V.say('We are down to ' + pct(h2) + ' of our hull.', V.name + ' is down to ' + pct(h2) + ' of her hull.');
         }
         const n = (sm ? localOdds(sm, me).foes : 0) || odds.foes;
@@ -4765,7 +4868,12 @@
     const opened = follows ? 0.5 * netSpeed * bo.secs : bo.opened;
     const need = Math.max(0, wantOut - R - opened);
     const clear = wantOut <= 0 ? 0 : need <= 0 ? bo.secs : netSpeed > 1 ? bo.secs + need / netSpeed : null;
-    const matchedBy = follows && netSpeed < bo.speed * 0.25
+    // F-2 again, at the end of it: when she matches the whole burn the opening speed rounds to
+    // nothing, and the key was still printing 'opening at 0 m/s' as though that were a result.
+    // A burn that opens nothing says so on the label, and is never the pick while anything else
+    // on the card will do.
+    const opensNothing = follows && spd(netSpeed) === spd(0);
+    const matchedBy = (follows && netSpeed < bo.speed * 0.25) || opensNothing
       ? V.say(' · she can match this burn, so the range only opens once her drive is hurt',
         ' · ' + herObj + ' can match this burn, so the range only opens once her drive is hurt')
       : '';
@@ -4824,21 +4932,29 @@
     const list = [];
     list.push({
       id: 'breakoff',
-      label: 'Break off and open',
-      detail: time(bo.secs) + ' of burn away from ' + herObj + ', then cold · ' +
-        (covers
+      label: opensNothing ? V.say('Break off: she can match the burn',
+        'Break off: ' + herObj + ' can match the burn') : 'Break off and open',
+      // Where she matches the whole burn, why the range holds is the first thing to read: three
+      // clauses is what a key holds, and behind the Why? key is not where that belongs.
+      detail: time(bo.secs) + ' of burn away from ' + herObj + ', then cold' +
+        (opensNothing ? matchedBy : '') + ' · ' +
+        // 'coasting at 0 m/s · outside her burn-through in 9m 40s' is a promise the coast does not
+        // keep: where she matches the whole burn the key reads the same way it does when the burn
+        // buys distance and nothing else.
+        (covers && !opensNothing
           ? 'coasting at ' + spd(netSpeed) + ' · outside ' + herOwn + ' ' + km(bite) + ' burn-through in ' + time(clear)
           : (bite > 0
             ? herOwn + ' beams reach ' + km(bite) + ', and ' + (clear == null ? 'this course never clears that'
               : 'clearing that takes ' + time(clear)) +
               (life != null ? ' · the armour lasts ' + time(life) : '') +
-              ' · opening at ' + spd(netSpeed) +
+              (opensNothing ? '' : ' · opening at ' + spd(netSpeed)) +
               V.say(' · this buys distance, and we stay inside her beams',
                 ' · this buys distance, and ' + V.name + ' stays inside ' + herOwn + ' beams')
             // R-5: her bite has fallen to nothing, so there is no burn-through to get outside of.
-            : herOwn + ' beams cannot reach ' + V.us + ' at any range now · opening at ' + spd(netSpeed) +
-              ' · ' + rangeSay(view) + ' out and opening')) +
-        matchedBy +
+            : herOwn + ' beams cannot reach ' + V.us + ' at any range now' +
+              (opensNothing ? '' : ' · opening at ' + spd(netSpeed)) +
+              ' · ' + rangeSay(view) + (opensNothing ? ' out' : ' out and opening'))) +
+        (opensNothing ? '' : matchedBy) +
         (dartLed ? ' · ' + count(inc.darts) + ' interceptors in the air carry their own drive and follow this burn' : '') +
         (runsTail ? ' · the run turns ' + V.our + ' tail to ' + herObj + ': ' + tailCm + ' cm against ' +
           noseCm + ' cm on the nose' : '') +
@@ -4846,8 +4962,8 @@
       // With the armour running out, a burn that only buys distance is still the answer: it is the
       // one key on the card that takes hull out of the fire. Unless the fire is interceptors, which
       // come with it.
-      noRec: (!covers && !dying) || (dartLed && !covers),
-      recommended: !won && (covers || (dying && !sisNear && !dartLed)) && behind,
+      noRec: opensNothing || (!covers && !dying) || (dartLed && !covers),
+      recommended: !opensNothing && !won && (covers || (dying && !sisNear && !dartLed)) && behind,
       act: (s) => startBreak(s, ship, target || null, bo.secs, true),
     });
     if (sis) {
@@ -5754,6 +5870,11 @@
     if (p.lowG == null || p.tLow == null) return null;
     const cls = classOf(ship);
     const doctrine = cls && cls.doctrine && cls.doctrine.range > 0 ? cls.doctrine.range : 200e3;
+    // Nothing hostile in the sim: the burn is about the plot, not about a fight.
+    const quiet = !sim.hostiles(ship).some((h) => !h.destroyed && !h.captured);
+    // A hull on a falling ellipse has a clock of its own. The story puts when it ends in
+    // sim.flags.impactT, so the key can price what holding here costs without guessing at it.
+    const fall = quiet && sim.flags && sim.flags.impactT > sim.time ? sim.flags.impactT - sim.time : null;
     // The routine's own rule for a hull it is flying: work while a repair runs and the fight is
     // still a long way off, couches once it is not. And a burn that wounds the crew is only worth
     // it when the clock is the mission.
@@ -5827,9 +5948,17 @@
       },
       {
         id: 'hold',
-        label: 'Hold and fight at this range',
-        detail: 'no burn, and the parties keep working · ' +
-          V.say('we hold at ', V.name + ' holds at ') + rangeSay(p.view),
+        // Chapter 1 has nothing hostile in the sim: the burn there is a race against a falling
+        // ellipse, not a fight, and 'Hold and fight at this range' offered a fight to nobody.
+        // What holding costs is then the clock — the tanker's fall, or the arrival given up.
+        // The parties clause is printed only when a party is actually working.
+        label: quiet ? 'Hold this range' : 'Hold and fight at this range',
+        detail: (p.working ? 'no burn, and the parties keep working' : 'no burn') + ' · ' +
+          V.say('we hold at ', V.name + ' holds at ') + rangeSay(p.view) +
+          (quiet && fall != null ? ' · ' + target.name + ' comes down in ' + time(fall) : '') +
+          (quiet && fall == null && p.tHigh != null
+            ? ' · ' + V.say('the burn has us alongside in ', 'the burn has her alongside in ') + time(p.tHigh)
+            : ''),
         passive: true,
         burns: true,
         act: (s) => {

@@ -2,6 +2,16 @@
    tactical canvas; help, physics, the hull view, the campaign map and the configurator stay DOM screens. */
 (function () {
   'use strict';
+  // The textbook transfer from this start: a burn-flip-brake in the target's frame that credits the speed we
+  // already carry toward her (a head start, not a bill: the scan of 2026-09-22 found |v_rel| added whatever
+  // its sign, so a hull could read as beating the ideal). With v the closing speed and d the range,
+  // 2·sqrt(a·d + v²/2) − v, plus the sideways speed that has to be killed either way.
+  function idealTransfer(a, b) {
+    const d = U.dist(a.pos, b.pos), acc = a.accelNominal();
+    const rel = U.sub(a.vel, b.vel), rhat = U.norm(U.sub(b.pos, a.pos));
+    const vc = U.dot(rel, rhat), side = Math.sqrt(Math.max(0, U.len(rel) * U.len(rel) - vc * vc));
+    return 2 * Math.sqrt(Math.max(0, acc * d + (vc * vc) / 2)) - vc + side;
+  }
   const OD = window.OD;
   const U = OD.U, P = OD.P;
   const $ = (id) => document.getElementById(id);
@@ -474,7 +484,7 @@
       OD.UI.resetLog(this.sim);
       // The ideal transfer for the first rendezvous, so the debrief can say how close the flying came to it.
       const rv = (scenario.objectives || []).find((o) => o.type === 'rendezvous');
-      if (rv) { const a = this.sim.resolveShip(rv.ship), b = this.sim.byId(rv.target); if (a && b) this.ctx.idealDv = P.brachistochrone(U.dist(a.pos, b.pos), a.accelNominal()).dv + U.len(U.sub(a.vel, b.vel)); this.ctx.idealShip = a && a.id; this.ctx.idealObj = rv; this.ctx.firstDv = null; }
+      if (rv) { const a = this.sim.resolveShip(rv.ship), b = this.sim.byId(rv.target); if (a && b) this.ctx.idealDv = idealTransfer(a, b); this.ctx.idealShip = a && a.id; this.ctx.idealObj = rv; this.ctx.firstDv = null; }
       const first = this.sim.playerShips().find((s) => s.role !== 'station') || this.sim.playerShips()[0];
       if (first) this.select(first.id);
       this.fitAll();
@@ -496,7 +506,7 @@
       // the crew (v13): wounded and lost across our hulls, only when there were any
       { const w = own.reduce((a, s) => a + (s.crew ? Math.round(s.crew.wounded || 0) : 0), 0), l = own.reduce((a, s) => a + (s.crew ? Math.round(s.crew.lost || 0) : 0), 0);
         if (w + l > 0) stats.push({ k: 'Crew', v: [w > 0 ? w + ' wounded' : '', l > 0 ? l + ' lost' : ''].filter(Boolean).join(', '), n: w + l, f: (x) => String(Math.round(x)) }); }
-      if (ctx.idealDv && ctx.firstDv != null) stats.push({ k: 'First transfer', v: U.fmt.dv(ctx.firstDv) + ' · textbook ' + U.fmt.dv(ctx.idealDv) });
+      if (ctx.idealDv && ctx.firstDv != null) stats.push({ k: 'First transfer', v: U.fmt.dv(ctx.firstDv) + ' · textbook ' + U.fmt.dv(ctx.idealDv) + ' in flat space' });
       // one line per player ship from the damage module: the parts that are not sound
       const reports = own.map((s) => {
         let bad = [];
@@ -732,23 +742,33 @@
     },
     input(canvas) {
       let down = null, dragging = false, pinch = null, lastClick = { x: -1, y: -1, id: null, t: 0 };
+      // A finger held on a ship is the phone's right-click (Help promised it; the scan of 2026-09-22 found no code for it).
+      let longPress = null, held = false;
+      const cancelHold = () => { if (longPress) { clearTimeout(longPress); longPress = null; } };
       const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
       // a bridge screen takes every pointer event on the canvas; the map never pans or zooms under a menu
       const bridge = () => OD.Bridge && OD.Bridge.active && !OD.UI.currentScreen;
       canvas.addEventListener('pointerdown', (e) => {
         if (bridge()) { const p = pos(e); try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* fine */ } OD.Bridge.pointer('down', p.x, p.y, e); down = null; return; }
         if (!this.sim) return; down = pos(e); dragging = false; canvas.setPointerCapture(e.pointerId);
+        cancelHold(); held = false;
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          const at = down;
+          longPress = setTimeout(() => { longPress = null; if (down === at && !dragging && this.sim) { held = true; this.click(at.x, at.y, 2, false, null); } }, 550);
+        }
       });
       canvas.addEventListener('pointermove', (e) => {
         if (bridge()) { const p = pos(e); OD.Bridge.pointer('move', p.x, p.y, e); return; }
         if (!down || !this.sim) return;
         const p = pos(e);
-        if (!dragging && Math.hypot(p.x - down.x, p.y - down.y) > 5) dragging = true;
+        if (!dragging && Math.hypot(p.x - down.x, p.y - down.y) > 5) { dragging = true; cancelHold(); }
         if (dragging) { this.cam.x -= (p.x - down.x) / this.cam.zoom; this.cam.y += (p.y - down.y) / this.cam.zoom; this.cam.follow = null; this._pannedAt = performance.now(); down = p; }
       });
       canvas.addEventListener('pointerup', (e) => {
         if (bridge()) { const p = pos(e); OD.Bridge.pointer('up', p.x, p.y, e); down = null; return; }
+        cancelHold();
         if (!down || !this.sim) { down = null; return; }
+        if (held) { held = false; down = null; dragging = false; return; }
         const p = pos(e);
         if (!dragging) {
           const same = Math.hypot(p.x - lastClick.x, p.y - lastClick.y) < 8 && performance.now() - lastClick.t < 4000;

@@ -60,7 +60,7 @@
     sys_radiators: { title: 'Radiator integrity', body: 'Damaged radiator area sheds less heat.' },
     sys_sensors: { title: 'Sensors', body: 'Tracking quality. Damaged sensors widen every aim.' },
     sys_weapons: { title: 'Weapons', body: 'Mount integrity, shared across the ship.' },
-    boarding: () => { const b = (OD.Sim && OD.Sim.BOARD) || { range: 3000, speed: 25, time: 90 }; return { title: 'Boarding', body: 'Hold within ' + U.fmt.dist(b.range) + ' of a hostile at under ' + b.speed + ' m/s relative speed and your party crosses. ' + U.fmt.time(b.time) + ' later the ship is yours.' }; },
+    boarding: () => { const b = (OD.Sim && OD.Sim.BOARD) || { range: 3000, speed: 25, time: 90, odds: 2 }; return { title: 'Boarding', body: 'Hold within ' + U.fmt.dist(b.range) + ' of a hostile at under ' + b.speed + ' m/s relative speed and your party crosses: ' + U.fmt.time(b.time) + ' against a crew the size of yours, longer against a bigger one. A crew more than ' + (b.odds === 2 ? 'twice' : b.odds + ' times') + ' yours throws the party back.' }; },
     follow: { title: 'Follow', body: 'Keep the camera centred on this ship. F does the same.' },
     weaponsfree: { title: 'Weapons free', body: 'Fire at the target with every mount in arc. Switch it off to hold fire, for instance to close for boarding or to keep the sink for the drive. Your other ships run their own bays. This one launches interceptors on your order (L or A).' },
     threats: { title: 'Threats', body: 'Interceptors and slugs inbound on this ship, with the time until they arrive and whether point defence can stop them first. The map draws each one with its countdown, and warp drops to 1× on every new launch.' },
@@ -607,6 +607,25 @@
   // What the drive gives now: 0 for a wrecked or disabled drive is the truth, so the rated figure is the
   // fallback only when accel() is not a number (round 2: the hull view printed 1.3 g over "Drive 0 %").
   function liveAccel(ship) { const a = typeof ship.accel === 'function' ? ship.accel() : NaN; return typeof a === 'number' && isFinite(a) ? a : ship.accelNominal(); }
+  // Why the live acceleration is under the rated one, from the cause (the scan of 2026-09-22 found the physics
+  // screen blaming the drive for dry tanks, a disabled hull and the crew's g limit). `none` is the sentence for
+  // no thrust at all; `why` the bracket after the share, empty when the share is the rated one.
+  function thrustWhy(ship) {
+    const live = liveAccel(ship), rated = ship.accelNominal(), fac = rated > 0 ? live / rated : 1;
+    const drive = ship.systems ? ship.systems.drive : 1;
+    let none = '';
+    if (ship.destroyed) none = 'no thrust: she is destroyed';
+    else if (ship.propMass <= 0) none = 'no thrust: the tanks are dry';
+    else if (ship.disabled) none = 'no thrust: she is out of the fight';
+    else if (!(drive > 0)) none = 'no thrust: the drive is wrecked';
+    else if (!(live > 0)) none = 'no thrust';
+    const parts = [];
+    if (drive < 0.995 && drive > 0) parts.push('the drive is at ' + Math.round(drive * 100) + ' %');
+    if (ship.overheated) parts.push('the sink is full, so the drive is held to a quarter');
+    const unc = ship.propMass > 0 && !ship.disabled && !ship.destroyed ? (ship.thrust * drive * (ship.overheated ? 0.25 : 1)) / ship.mass() : 0;
+    if (live > 0 && unc > live * 1.005) parts.push('the g limit set for the crew');
+    return { live, fac, none, why: parts.join(', ') };
+  }
   function etaWords(s) { if (!(s > 0)) return ''; const m = Math.floor(s / 60), r = Math.round(s % 60); return m ? m + ' min' + (r >= 30 ? ' 30 s' : '') : r + ' s'; }
   function updateDamage(ship) {
     if (!bound.dmg) return false;
@@ -886,7 +905,12 @@
         const hp = active ? plan : OD.Guide.plan(sim, ship, { type: 'intercept', target: target.id, range: 2000, vmax: ship.order.vmax });
         set('test', hp.active ? OD.Guide.summary(hp) : '—', hp.active && !hp.feasible ? 'crit' : '');
         const eta = active ? OD.Guide.eta(sim, plan, plan.arrive) : null;
-        set('tarr', active ? (plan.arrive ? (eta < 3 ? 'now' : 'in ' + U.fmt.time(eta)) : plan.crash ? 'never: ends on the ground' : plan.dry ? 'never: tanks run dry' : 'beyond 4 h') : '—', active && (plan.crash || plan.dry) ? 'crit' : '');
+        // The plan flies the target as a coasting body. While she burns, the arrival is only as good as
+        // her next order: with her drive out-pulling ours it never comes, otherwise it holds if she coasts.
+        const herBurn = target && !target.destroyed && typeof target.accel === 'function' && (target.throttle || 0) > 0.05 ? target.accel() * target.throttle : 0;
+        const outrun = herBurn > 0 && herBurn >= liveAccel(ship) * Math.max(0.05, ship.throttle || 1) && d > 200e3;
+        const arriveWords = plan && plan.arrive ? (eta < 3 ? 'now' : outrun ? 'not while she burns this hard' : 'in ' + U.fmt.time(eta) + (herBurn > 0 ? ' if she coasts' : '')) : '';
+        set('tarr', active ? (plan.arrive ? arriveWords : plan.crash ? 'never: ends on the ground' : plan.dry ? 'never: tanks run dry' : 'beyond 4 h') : '—', active && (plan.crash || plan.dry || outrun) ? 'crit' : '');
       } else {
         const est = OD.Autopilot.estimate(ship, target);
         set('test', isFinite(est.time) ? U.fmt.time(est.time) + ' · ' + U.fmt.dv(est.dv) : '—', est.dv > ship.deltaV() ? 'crit' : '');
@@ -1271,7 +1295,7 @@
       const rows = [
         ['Length', known ? cls.length + ' m' : dash], ['Dry mass', full ? U.fmt.mass(ship.dryMass) : dash], ['Propellant', full ? U.fmt.mass(ship.propMass) + ' / ' + U.fmt.mass(ship.fullPropMass) : dash],
         ['Delta-v', full ? U.fmt.dv(ship.deltaV()) + ' / ' + U.fmt.dv(ship.deltaVFull()) : dash], ['Exhaust', known ? U.fmt.speed(ship.exhaustVelocity) : dash], ['Thrust', known ? U.fmt.si(ship.thrust, 'N') : dash], ['Accel.', full ? U.fmt.accel(liveAccel(ship)) : dash],
-        ['Radiators', known ? U.fmt.si(ship.radiatorArea, 'm²') + ' · ' + Math.round(ship.radiators.state * 100) + '% out' : dash], ['Heat sink', full ? Math.round(ship.thermalLoad() * 100) + '% full' : dash],
+        ['Radiators', known ? U.fmt.num(ship.radiatorArea) + ' m² · ' + Math.round(ship.radiators.state * 100) + '% out' : dash], ['Heat sink', full ? Math.round(ship.thermalLoad() * 100) + '% full' : dash],
         ['Armour nose', full ? ship.armour.nose + ' cm' : dash], ['Armour flank / tail', full ? ship.armour.flank + ' / ' + ship.armour.tail + ' cm' : dash],
         ['Hull', full ? Math.round(ship.hull * 100) + '%' : dash], ['Drive', full ? Math.round(ship.systems.drive * 100) + '%' : dash], ['Sensors', full ? Math.round(ship.systems.sensors * 100) + '%' : dash],
       ];
@@ -1447,16 +1471,16 @@
     if (ship) {
       boxes.push({ t: 'The rocket equation', p: 'Delta-v is the total speed change the tanks can buy. It comes from two numbers only: the exhaust velocity vₑ, and the ratio of full mass m₀ to dry mass m₁. The ratio sits inside a logarithm, so doubling a ship\u2019s delta-v costs far more than double the propellant.', f: 'Δv = vₑ · ln(m₀/m₁)\nvₑ = ' + U.fmt.speed(ship.exhaustVelocity) + '\nm₀ = ' + U.fmt.mass(ship.mass()) + '   m₁ = ' + U.fmt.mass(ship.dryMass) + '\nΔv = ' + U.fmt.dv(ship.deltaV()) + ' now, ' + U.fmt.dv(ship.deltaVFull()) + ' full\nspent this sortie: ' + U.fmt.dv(ship.stats.dvSpent) });
       // the figures are the ones the simulation is using now: a hurt drive scales the thrust, a wrecked one has none
-      const a = ship.accelNominal(), live = liveAccel(ship), fac = a > 0 ? live / a : 1;
+      const a = ship.accelNominal(), tw = thrustWhy(ship), live = tw.live, fac = tw.fac;
       const aLine = live > 0
-        ? 'a = F/m = ' + U.fmt.si(ship.thrust, 'N') + (fac < 0.995 ? ' × ' + Math.round(fac * 100) + ' % (the drive is hurt)' : '') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(live)
-        : 'no thrust: the drive is wrecked\nrated a = F/m = ' + U.fmt.si(ship.thrust, 'N') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(a);
-      boxes.push({ t: 'Thrust and acceleration', p: 'Acceleration a is thrust F divided by current mass m. The drive puts out the same force all through a burn, so as propellant burns off the ship accelerates harder. The flip time is how long it takes to swing 180° before a braking burn.', f: aLine + '\nwhen dry: ' + U.fmt.accel(ship.thrust / ship.dryMass) + '\nflip 180°: ' + U.fmt.time(OD.Autopilot.flipTimeFor(ship)) });
+        ? 'a = F/m = ' + U.fmt.si(ship.thrust, 'N') + (fac < 0.995 ? ' × ' + Math.round(fac * 100) + ' %' + (tw.why ? ' (' + tw.why + ')' : '') : '') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(live)
+        : tw.none + '\nrated a = F/m = ' + U.fmt.si(ship.thrust, 'N') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(a);
+      boxes.push({ t: 'Thrust and acceleration', p: 'Acceleration a is thrust F divided by current mass m. The drive puts out the same force all through a burn, so as propellant burns off the ship accelerates harder. The flip time is how long it takes to swing 180° before a braking burn.', f: aLine + '\nwhen dry: ' + U.fmt.accel(ship.thrust / ship.dryMass) + '\nflip 180°: ' + U.fmt.time(OD.Autopilot.flipTimeFor(typeof OD.Autopilot.turnFactor === 'function' ? { angAccel: ship.angAccel * OD.Autopilot.turnFactor(ship), maxAngVel: ship.maxAngVel } : ship)) });
     }
     if (ship && target) {
       const d = U.dist(ship.pos, target.pos), a = liveAccel(ship);
       const b = a > 0 ? P.brachistochrone(d, a) : null;
-      boxes.push({ t: 'Brachistochrone transfer', p: 'The quickest transfer a torch drive can fly. Burn toward the target for half the distance, flip, then burn against your motion for the other half. d is the range and a the acceleration. Time and delta-v both grow with the square root of the distance, so a target twice as far costs about 1.4 times as much of each.', f: 'range d = ' + U.fmt.dist(d) + (b ? '\nt = 2·√(d/a) = ' + U.fmt.time(b.time) + '   peak ' + U.fmt.speed(b.peakV) + '\nΔv = 2·√(d·a) = ' + U.fmt.dv(b.dv) + '\n\ncapped at a 1.5 km/s cruise: ' + U.fmt.time(P.transferWithBudget(d, a, 3000).time) + ' and ' + U.fmt.dv(Math.min(3000, b.dv)) + ' of Δv' : '\nno thrust: the drive is wrecked, and she cannot fly this transfer'), plot: true });
+      boxes.push({ t: 'Brachistochrone transfer', p: 'The quickest transfer a torch drive can fly. Burn toward the target for half the distance, flip, then burn against your motion for the other half. d is the range and a the acceleration. Time and delta-v both grow with the square root of the distance, so a target twice as far costs about 1.4 times as much of each.', f: 'range d = ' + U.fmt.dist(d) + (b ? '\nt = 2·√(d/a) = ' + U.fmt.time(b.time) + '   peak ' + U.fmt.speed(b.peakV) + '\nΔv = 2·√(d·a) = ' + U.fmt.dv(b.dv) + '\n\ncapped at a 1.5 km/s cruise: ' + U.fmt.time(P.transferWithBudget(d, a, 3000).time) + ' and ' + U.fmt.dv(Math.min(3000, b.dv)) + ' of Δv' : '\n' + thrustWhy(ship).none + ', and she cannot fly this transfer'), plot: true });
       const lag = P.lightLag(d);
       boxes.push({ t: 'No stealth in space', p: 'A lit drive throws gigawatts of light and heat at a 3 K sky, so every sensor in the engagement sees it. What changes from ship to ship is how well they see you. Light takes time to cross the range as well. The box below says how far the target has moved since the light you are seeing left it.', f: 'drive plume: ' + U.fmt.power(0.5 * (ship.thrust || 0) * (ship.exhaustVelocity || 0) * ((OD.Sensors && OD.Sensors.T && OD.Sensors.T.plumeFraction) || 0.02)) + ' at full thrust\nlight lag to target: ' + (lag < 1 ? Math.round(lag * 1000) + ' ms' : lag.toFixed(1) + ' s') + '\ntarget has moved ' + U.fmt.dist(U.len(target.vel) * lag) + ' since that picture' });
       const facet = facetSeen(ship, target);
@@ -1550,7 +1574,7 @@
     ctx.fillStyle = '#4fd1c5'; ctx.fillRect(legX[0], legY[0] - 4, 14, 2); ctx.fillStyle = '#a9b6c6'; ctx.fillText('fast burn-flip-burn', legX[0] + 18, legY[0]);
     ctx.fillStyle = '#8fa6bf'; ctx.fillRect(legX[1], legY[1] - 4, 14, 2); ctx.fillStyle = '#a9b6c6'; ctx.fillText('cruise capped at ' + U.fmt.speed(cap), legX[1] + 18, legY[1]);
     if (!(a > 0)) {
-      const note = 'No thrust: the drive is wrecked. She cannot fly these transfers.';
+      const tw = thrustWhy(ship), note = (tw.none ? tw.none.charAt(0).toUpperCase() + tw.none.slice(1) : 'No thrust') + '. She cannot fly these transfers.';
       ctx.font = '600 13px "Rajdhani", sans-serif'; ctx.textAlign = 'left';
       const w = ctx.measureText(note).width, nx = pane[0].x0 + 8, ny = (pane[0].y0 + pane[0].y1) / 2;
       ctx.fillStyle = 'rgba(6,10,16,0.92)'; ctx.fillRect(nx - 6, ny - 14, w + 12, 22);
@@ -1585,7 +1609,7 @@
       '<section><h4>Controls</h4><ul>' +
       (window.innerWidth < 900
         ? '<li>Tap one of your ships to command it. Tap another ship to make it the target.</li>' +
-          '<li>Orders are in the panel below the map, which scrolls: Intercept, Keep range, Match speed, Hold, Retreat, Manual. A long press on a hostile keeps range on it.</li>'
+          '<li>Orders are in the panel below the map, which scrolls: Intercept, Keep range, Match speed, Hold, Retreat, Manual. A finger held on a hostile keeps range on it; so does Keep range in the panel with her targeted.</li>'
         : '<li>Click one of your ships, or its row on the left, to command it. Click another ship to make it the target. <kbd>Tab</kbd> steps through your ships.</li>' +
           '<li>Right-click a hostile to keep range on it. Right-click a friendly or a civilian to intercept it.</li>' +
           '<li>Orders are in the right panel: Intercept <kbd>I</kbd>, Keep range <kbd>K</kbd>, Match speed <kbd>M</kbd>, Hold <kbd>H</kbd>, Retreat <kbd>R</kbd>, and Manual for a heading and a throttle you set.</li>') +
@@ -1599,7 +1623,7 @@
       '<li><b>Heat</b> builds while you burn and fight. The radiators shed it, and they are the easiest part of the ship to hit. Stow them with <kbd>X</kbd> when slugs are on the way and extend them as soon as the shooting stops.</li>' +
       '<li><b>Facing</b>: a corvette carries 20 cm of armour on the nose and 4 cm on the tail. Braking toward an enemy shows them that tail.</li>' +
       '<li><b>Jink</b> makes unguided slugs miss, and each nudge costs delta-v. Beams do not miss. They weaken with range instead.</li>' +
-      '<li><b>Boarding</b>: hold within 3 km of a hostile at under 25 m/s relative speed for 90 seconds and the ship changes hands.</li>' +
+      '<li><b>Boarding</b>: hold within 3 km of a hostile at under 25 m/s relative speed. The party crosses in 90 seconds against a crew the size of yours, longer against a bigger one, and the ship changes hands. A crew more than twice yours throws it back.</li>' +
       '</ul></section>' +
       '<section><h4>Seeing and being seen</h4><ul>' +
       '<li>Nothing hides in space, but a track has a quality. A <b>contact</b> is a bearing and a rough range, drawn as a ? inside a ring of where the ship might be. A <b>track</b> adds the class. A <b>solution</b> is good enough to fire on, so the beams and coilguns open up.</li>' +

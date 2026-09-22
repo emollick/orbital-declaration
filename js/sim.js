@@ -13,6 +13,20 @@
   // (v13, round 3): past BOARD.odds fit defenders to a fit boarder the party is thrown back, and that hull
   // does not try her again for BOARD.retry seconds.
   const BOARD = { range: 3000, speed: 25, time: 90, odds: 2, retry: 600 };
+  // The crossing and its odds, from the two fit crews: BOARD.time hull to hull against an equal crew, longer
+  // against a bigger one (up to four times), and past BOARD.odds fit defenders to one of ours the party is
+  // thrown back. One function, exported as OD.Sim.boardingPlan, so the card, the tips, Help and the log all
+  // quote the crossing the sim will actually charge (the scan of 2026-09-22 found four screens saying 90 s).
+  function boardingPlan(ship, target) {
+    const ours = ship && ship.crew && ship.crew.fit > 0 ? ship.crew.fit : 0;
+    const theirs = target && target.crew && target.crew.fit > 0 ? target.crew.fit : 0;
+    const known = ours > 0 && theirs > 0;
+    return {
+      time: BOARD.time * (known ? U.clamp(theirs / ours, 0.5, 4) : 1),
+      thrownBack: known && theirs > BOARD.odds * ours,
+      ours: Math.round(ours), theirs: Math.round(theirs), known,
+    };
+  }
 
   // What a plot is worth saying out loud: two significant figures, and a bearing to the nearest five degrees.
   // A reading nobody has a solution on is not known to the metre, so it is not printed to the metre.
@@ -302,7 +316,9 @@
     // A hull disabled for a wrecked drive comes back when a jury-rig gives her thrust (v13). A hull disabled for
     // her hull does not: nothing a party does puts armour back. The threshold is the combat module's.
     comebacks() {
-      const T = OD.Engagement && OD.Engagement.T;
+      // the combat module exports its numbers as `tuning` (the scan of 2026-09-22 found this read `T`, which
+      // never existed, so the floor was always the fallback; the two happen to agree at 0.15)
+      const T = OD.Engagement && (OD.Engagement.tuning || OD.Engagement.T);
       const floor = T && T.disableHull > 0 ? T.disableHull : 0.15;
       for (const ship of this.ships) {
         if (!ship.disabled || ship.captured || ship.destroyed || ship.role === 'station') continue;
@@ -349,10 +365,9 @@
         if (!ship.boarding || ship.boarding.target !== best.id) {
           if (!inContact) { ship.boarding = null; continue; }
           // The crossing takes longer against a bigger fit crew (v13): 90 s hull to hull, up to four times that.
-          const bFit = ship.crew && ship.crew.fit > 0 ? ship.crew.fit : 0, dFit = best.crew && best.crew.fit > 0 ? best.crew.fit : 0;
-          const time = BOARD.time * (bFit > 0 && dFit > 0 ? U.clamp(dFit / bFit, 0.5, 4) : 1);
+          const plan = boardingPlan(ship, best), time = plan.time;
           ship.boarding = { target: best.id, progress: 0, time };
-          this.addLog(ship.name + ': boarding party crossing to ' + best.name + (dFit > 0 && bFit > 0 ? ', ' + Math.round(dFit) + ' fit aboard her against our ' + Math.round(bFit) + ', about ' + (time >= 90 ? Math.round(time / 60) + ' min' : Math.round(time) + ' s') : '') + '.', 'Marines', 'info');
+          this.addLog(ship.name + ': boarding party crossing to ' + best.name + (plan.known ? ', ' + plan.theirs + ' fit aboard her against our ' + plan.ours + ', ' + U.fmt.time(time) + ' across' : '') + '.', 'Marines', 'info');
         }
         // Contact lost mid-crossing: the party holds on for a while rather than starting over.
         ship.boarding.progress += inContact ? dt / (ship.boarding.time || BOARD.time) : -dt / 120;
@@ -495,7 +510,9 @@
         }
         case 'reach': {
           const a = this.resolveShip(o.ship);
-          if (!a) return 'fail';
+          // A hull on the surface or in enemy hands cannot reach anything (the scan of 2026-09-22 found chapter 1
+          // running for hours after Long Meridian hit Callisto, the objective open and no debrief).
+          if (!a || a.destroyed || a.captured) return 'fail';
           const p = o.target ? (this.byId(o.target) || {}).pos : o.point;
           if (!p) return false;
           const d = U.dist(a.pos, p);
@@ -623,4 +640,5 @@
   OD.Sim = Sim;
   OD.Sim.makeShip = makeShip;
   OD.Sim.BOARD = BOARD;
+  OD.Sim.boardingPlan = boardingPlan;
 })();
