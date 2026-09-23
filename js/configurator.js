@@ -71,6 +71,7 @@
     radiators: { label: 'Radiators', options: [['auto', 'Yard\'s choice'], ['wings', 'Wings'], ['cross', 'Cross'], ['fan', 'Fan']] },
     nozzles: { label: 'Nozzles', options: [['auto', 'Yard\'s choice'], ['1', 'One'], ['2', 'Two'], ['3', 'Three'], ['4', 'Four']] },
   };
+  const VIEW_NAME = { blueprint: 'blueprint', threequarter: 'three-quarter', side: 'side', top: 'top' };
   const GROUP_LABEL = { spinal: 'Spinal', turret: 'Turret', rail: 'Rail', bay: 'Bay', pd: 'Point defence' };
 
   // ------------------------------------------------------------------ mass, power and heat rules
@@ -616,6 +617,7 @@
 .odc button.primary:hover { background-color: var(--accent, #4fd1c5); color: var(--accent-ink, #04141a); }
 .odc button.active { background-color: var(--accent, #4fd1c5); color: var(--accent-ink, #04141a); background-image: none; }
 .odc button.danger { color: #ffb0b0; } .odc button.danger:hover { background-color: rgba(255,107,107,0.14); }
+.odc button.danger.armed { color: #ffd0d0; background-color: rgba(255,107,107,0.16); background-image: none; outline: 1px solid rgba(255,107,107,0.55); outline-offset: -1px; }
 .odc button.ghost { background-image: none; color: var(--dim, #7f91a7); } .odc button.ghost:hover { color: var(--ink, #e0e8f0); background-color: transparent; }
 .odc button:disabled { opacity: 0.35; cursor: default; }
 .odc button.sm { padding: 4px 9px; font-size: 11px; }
@@ -625,6 +627,10 @@
 .odc .odc-seg button.active { background-color: transparent; color: var(--accent, #4fd1c5); border-bottom-color: var(--accent, #4fd1c5); }
 .odc input[type=range] { width: 100%; margin: 0; height: 20px; accent-color: var(--accent, #4fd1c5); background: transparent; }
 .odc select, .odc input[type=text] { background: rgba(4,7,12,0.7); border: 0; border-bottom: 1px solid var(--line-2, rgba(120,150,180,0.42)); border-radius: 0; color: var(--ink, #e0e8f0); font-family: var(--mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace); font-size: 11.5px; padding: 3px 2px; width: 100%; }
+/* a drawn chevron in place of the native arrow: it takes 14 px, so the longest fitting reads in full in a 312 px menu */
+.odc select { -webkit-appearance: none; appearance: none; padding-right: 16px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2, #b1bfce) 50%), linear-gradient(135deg, var(--ink-2, #b1bfce) 50%, transparent 50%);
+  background-position: calc(100% - 8px) 55%, calc(100% - 4px) 55%; background-size: 4px 4px, 4px 4px; background-repeat: no-repeat; }
 .odc select option { background: #0a0f16; }
 .odc .mono { font-family: var(--mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; }
 .odc [data-tip] { cursor: help; }
@@ -633,10 +639,11 @@
 .odc-title { grid-area: title; min-width: 0; } .odc-headr { grid-area: right; } .odc-hulls { grid-area: hulls; }
 .odc-eyebrow { font-family: var(--display, 'Rajdhani', sans-serif); color: var(--accent, #4fd1c5); letter-spacing: 0.24em; text-transform: uppercase; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
 .odc-eyebrow::before { content: ''; width: 18px; height: 2px; background: var(--accent, #4fd1c5); flex: none; }
-.odc-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; font-family: var(--display, 'Rajdhani', sans-serif); font-weight: 700; font-size: 30px; line-height: 1; letter-spacing: 0.02em; margin-top: 6px; }
-.odc-nameinput { font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px dashed var(--line-2, rgba(120,150,180,0.42)); padding: 0 2px; width: 7.5em; min-width: 4em; letter-spacing: inherit; }
+.odc-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 0; font-family: var(--display, 'Rajdhani', sans-serif); font-weight: 700; font-size: 30px; line-height: 1; letter-spacing: 0.02em; margin-top: 6px; }
+.odc-nameinput { font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px dashed var(--line-2, rgba(120,150,180,0.42)); padding: 0 2px; width: 7.5em; min-width: 2.5em; max-width: 100%; letter-spacing: inherit; }
 .odc-nameinput:focus { border-bottom-style: solid; outline: 0; }
-.odc-cls { color: var(--dim, #7f91a7); font-size: 19px; font-weight: 600; }
+.odc-cls { color: var(--dim, #7f91a7); font-size: 19px; font-weight: 600; white-space: nowrap; }
+.odc-name .odc-pill { margin-left: 12px; }
 .odc-pill { display: inline-block; font-family: var(--mono, monospace); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 6px; border-left: 2px solid var(--line-2, rgba(120,150,180,0.42)); color: var(--ink-2, #b1bfce); vertical-align: middle; }
 .odc-pill.warn { border-left-color: var(--warn, #ffb454); color: var(--warn, #ffb454); }
 .odc-hulls { display: flex; flex-wrap: wrap; gap: 2px; align-items: flex-end; }
@@ -646,24 +653,29 @@
 .odc-headr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .odc-headr select { width: auto; max-width: 220px; }
 /* body */
-.odc-main { display: grid; grid-template-columns: 330px minmax(0, 1fr) 324px; gap: 0 20px; align-items: start; }
+.odc-main { display: grid; grid-template-columns: 330px minmax(0, 1fr) 324px; grid-template-rows: auto 1fr; grid-template-areas: "controls stage readout" "controls more readout"; gap: 0 20px; align-items: start; }
+.odc-controls { grid-area: controls; min-width: 0; } .odc-stage { grid-area: stage; } .odc-readout { grid-area: readout; min-width: 0; } .odc-more { grid-area: more; min-width: 0; margin-top: 12px; }
+.odc-more .odc-sec:first-child { border-top: 1px solid var(--line, rgba(120,150,180,0.22)); padding-top: 8px; }
+.odc-more:empty { display: none; }
 .odc-sec { padding: 8px 0 10px; border-top: 1px solid var(--line, rgba(120,150,180,0.22)); }
 .odc-sec:first-child { border-top: 0; padding-top: 0; }
 .odc-sec h4 { font-family: var(--display, 'Rajdhani', sans-serif); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim, #7f91a7); margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .odc-sec h4::after { content: ''; flex: 1; height: 1px; background: var(--line, rgba(120,150,180,0.22)); }
-.odc-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 80px; gap: 8px; align-items: center; padding: 2px 0; font-size: 12.5px; }
+.odc-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) 72px; gap: 8px; align-items: center; padding: 2px 0; font-size: 12.5px; }
 .odc-row .k { color: var(--dim, #7f91a7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .odc-row .v { font-family: var(--mono, monospace); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; }
-.odc-row.slot { grid-template-columns: 76px minmax(0, 1fr); }
+.odc-row.slot { grid-template-columns: 96px minmax(0, 1fr); padding: 1px 0; }
+.odc-row.slot.stack { display: block; padding: 3px 0 2px; }
+.odc-row.slot.stack .k { display: block; font-size: 12px; line-height: 1.3; }
 .odc-note { color: var(--dim, #7f91a7); font-size: 11.5px; margin: 2px 0 4px; }
 .odc-btnrow { display: flex; flex-wrap: wrap; gap: 5px; }
 /* stage */
 .odc-stage { display: flex; flex-direction: column; min-width: 0; }
 .odc-stagehead { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 6px; }
 .odc-canvaswrap { position: relative; }
-.odc-canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; border-top: 1px solid var(--line-2, rgba(120,150,180,0.42)); border-bottom: 1px solid var(--line-2, rgba(120,150,180,0.42)); background: radial-gradient(ellipse at 50% 50%, rgba(20,30,45,0.5), rgba(4,7,12,0) 70%); }
+.odc-canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; border-top: 1px solid var(--line-2, rgba(120,150,180,0.42)); border-bottom: 1px solid var(--line-2, rgba(120,150,180,0.42)); background: radial-gradient(ellipse at 50% 50%, rgba(20,30,45,0.5), rgba(4,7,12,0) 70%); }
 .odc-key { font-family: var(--mono, monospace); font-size: 10.5px; color: var(--accent, #4fd1c5); letter-spacing: 0.04em; line-height: 1.5; padding: 5px 2px 0; }
-.odc.odc-mid .odc-row.slot { grid-template-columns: 60px minmax(0, 1fr); } .odc.odc-mid .odc-row.slot .k { font-size: 12px; } .odc.odc-mid .odc select { font-size: 11px; }
+.odc.odc-mid .odc-row.slot { grid-template-columns: 90px minmax(0, 1fr); } .odc.odc-mid .odc-row.slot .k { font-size: 12px; } .odc.odc-mid .odc-row.slot select { font-size: 10.5px; padding-left: 1px; padding-right: 14px; }
 .odc-caption { position: absolute; left: 10px; bottom: 8px; font-family: var(--mono, monospace); font-size: 10.5px; color: var(--dim, #7f91a7); letter-spacing: 0.04em; pointer-events: none; }
 .odc-state { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--dim, #7f91a7); }
 .odc-state label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -674,24 +686,24 @@
 .odc-say-head { font-family: var(--display, 'Rajdhani', sans-serif); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim, #7f91a7); font-weight: 600; }
 .odc-say-line { margin: 3px 0 0; font-size: 14px; line-height: 1.4; }
 /* readout */
-.odc-vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0 0 9px; border-bottom: 1px solid var(--line, rgba(120,150,180,0.22)); }
+.odc-vitals { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 8px 6px; padding: 0 0 9px; border-bottom: 1px solid var(--line, rgba(120,150,180,0.22)); }
 .odc-vitals .k { display: block; font-family: var(--display, 'Rajdhani', sans-serif); font-weight: 600; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim, #7f91a7); }
-.odc-vitals .v { display: block; font-family: var(--display, 'Rajdhani', sans-serif); font-weight: 600; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.02em; }
+.odc-vitals .v { display: block; font-family: var(--display, 'Rajdhani', sans-serif); font-weight: 600; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: 0.02em; }
 .odc-vitals .v small { font-size: 11px; font-weight: 500; color: var(--dim, #7f91a7); margin-left: 3px; letter-spacing: 0.04em; }
-.odc-vitals .s { display: block; font-family: var(--mono, monospace); font-size: 10.5px; color: var(--dim, #7f91a7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.odc-vitals .s { display: block; font-family: var(--mono, monospace); font-size: 10px; color: var(--dim, #7f91a7); white-space: nowrap; }
 .odc-bar { height: 10px; background: rgba(255,255,255,0.07); display: flex; overflow: hidden; margin: 5px 0 6px; position: relative; background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(255,255,255,0.14) calc(10% - 1px) 10%); }
 .odc-bar i { display: block; height: 100%; flex: none; transition: width 0.25s; }
 .odc-bar b { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.8); }
 .odc-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 11.5px; color: var(--ink-2, #b1bfce); }
 .odc-legend span { display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
-.odc-legend .sw { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: -1px; flex: none; }
+.odc-legend .sw { display: inline-block; width: 9px; height: 9px; margin: 0 6px 0 0; vertical-align: -1px; flex: none; border: 0; border-radius: 0; }
 .odc-legend em { font-style: normal; font-family: var(--mono, monospace); font-variant-numeric: tabular-nums; }
 .odc-kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12.5px; }
 .odc-kv .k { color: var(--dim, #7f91a7); white-space: nowrap; } .odc-kv .v { font-family: var(--mono, monospace); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .odc-kv .v.good, .odc .good { color: var(--good, #7ad97a); } .odc-kv .v.warn, .odc .warn { color: var(--warn, #ffb454); } .odc-kv .v.crit, .odc .crit { color: var(--crit, #ff6b6b); }
 .odc-heat { font-size: 12.5px; }
-.odc-heat .hr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; align-items: baseline; padding: 2px 0; }
-.odc-heat .k { color: var(--dim, #7f91a7); } .odc-heat .m { grid-column: 1 / -1; font-family: var(--mono, monospace); font-size: 11px; color: var(--ink-2, #b1bfce); } .odc-heat .v { font-family: var(--mono, monospace); text-align: right; white-space: nowrap; }
+.odc-heat .hr { display: flex; flex-wrap: wrap; column-gap: 8px; align-items: baseline; padding: 2px 0; }
+.odc-heat .k { color: var(--dim, #7f91a7); white-space: nowrap; flex: 1 0 auto; } .odc-heat .m { flex: 1 0 100%; font-family: var(--mono, monospace); font-size: 10px; color: var(--ink-2, #b1bfce); } .odc-heat .m span { white-space: nowrap; } .odc-heat .v { font-family: var(--mono, monospace); font-size: 12px; text-align: right; white-space: nowrap; margin-left: auto; }
 .odc-reach { font-size: 12px; } .odc-reach div { padding: 2px 0; border-top: 1px dashed var(--line, rgba(120,150,180,0.22)); } .odc-reach b { font-weight: 500; color: var(--ink, #e0e8f0); display: block; } .odc-reach span { color: var(--ink-2, #b1bfce); }
 .odc-facing { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; }
 .odc-facing svg { width: 96px; height: 48px; display: block; }
@@ -714,18 +726,26 @@
 .odc-tooltip .f { font-family: var(--mono, monospace); font-size: 11.5px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--line, rgba(120,150,180,0.22)); white-space: pre-wrap; }
 .odc[data-detail="essentials"] [data-adv] { display: none !important; }
 /* widths: the root measures itself (odc-mid under 1140 px, odc-narrow under 720 px); the media query only covers the first paint */
-.odc.odc-mid .odc-main { grid-template-columns: 300px minmax(0, 1fr) 300px; gap: 0 14px; }
-.odc.odc-mid .odc-row { grid-template-columns: 70px minmax(0, 1fr) 74px; }
+.odc.odc-mid .odc-main { grid-template-columns: 312px minmax(0, 1fr) 300px; gap: 0 14px; }
+.odc.odc-mid .odc-row { grid-template-columns: 82px minmax(0, 1fr) 68px; }
 .odc.odc-narrow .odc-head { grid-template-columns: 1fr; grid-template-areas: "title" "right" "hulls"; }
-.odc.odc-narrow .odc-main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.odc.odc-narrow .odc-row { grid-template-columns: 76px minmax(0, 1fr) 80px; }
+.odc.odc-narrow .odc-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: none; gap: 12px; }
+.odc.odc-narrow .odc-main > * { grid-area: auto; }
+.odc.odc-narrow .odc-more { order: 1; margin-top: 0; }
+.odc.odc-narrow .odc-canvas { aspect-ratio: 16 / 10; }
+.odc.odc-narrow .odc-row { grid-template-columns: 84px minmax(0, 1fr) 72px; }
+.odc.odc-narrow .odc-row.slot { grid-template-columns: 96px minmax(0, 1fr); }
 .odc.odc-narrow .odc-stage { order: -1; }
+.odc.odc-narrow .odc-hulls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .odc.odc-narrow .odc-name { font-size: 24px; }
 .odc.odc-narrow .odc-vitals .v { font-size: 18px; }
 @media (max-width: 720px) {
   .odc:not(.odc-mid) .odc-head { grid-template-columns: 1fr; grid-template-areas: "title" "right" "hulls"; }
-  .odc:not(.odc-mid) .odc-main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .odc:not(.odc-mid) .odc-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: none; gap: 12px; }
+  .odc:not(.odc-mid) .odc-main > * { grid-area: auto; }
   .odc:not(.odc-mid) .odc-stage { order: -1; }
+  .odc:not(.odc-mid) .odc-more { order: 1; margin-top: 0; }
+  .odc:not(.odc-mid) .odc-canvas { aspect-ratio: 16 / 10; }
 }
 @media (prefers-reduced-motion: reduce) { .odc-bar i { transition: none; } }
 `;
@@ -1020,10 +1040,13 @@
           ctx.fillStyle = dim; ctx.textAlign = 'center'; ctx.fillText(it.text, tx, ty);
         });
       };
-      place(parts.filter((p) => p.side > 0), pad + 2, 1, marks.length && keyIn ? W - keyW - 26 : W - 6);
-      place(parts.filter((p) => p.side < 0), H - pad - 24, -1, W - 6);
-      // dimension line
-      const yd = H - pad + 8;
+      // the label rows sit just clear of the hull and its fitting numbers, not out at the edges of a tall box
+      const ext = Math.max(ly.b * 0.5 + spanShown, ly.nozzleExit) * s;
+      const rowTop = Math.max(pad + 2, cy - ext - 56), rowBottom = Math.min(H - pad - 24, cy + ext + 56);
+      place(parts.filter((p) => p.side > 0), rowTop, 1, marks.length && keyIn ? W - keyW - 26 : W - 6);
+      place(parts.filter((p) => p.side < 0), rowBottom, -1, W - 6);
+      // dimension line, under the lower labels and above the caption strip
+      const yd = Math.min(H - pad - 4, rowBottom + 22);
       ctx.strokeStyle = 'rgba(180,192,207,0.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(-ly.L / 2), yd); ctx.lineTo(X(ly.L / 2), yd); ctx.moveTo(X(-ly.L / 2), yd - 4); ctx.lineTo(X(-ly.L / 2), yd + 4); ctx.moveTo(X(ly.L / 2), yd - 4); ctx.lineTo(X(ly.L / 2), yd + 4); ctx.stroke();
       ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(d.length + ' m', X(0), yd - 8);
       if (opts.caption !== false) { ctx.textAlign = 'left'; ctx.fillStyle = dim; ctx.fillText('BLUEPRINT · TOP VIEW · NOSE RIGHT', 10, H - 10); }
@@ -1103,6 +1126,7 @@
           '<div class="odc-say" data-tone=""><div class="odc-say-head">Yard engineer</div><p class="odc-say-line"></p></div>' +
         '</section>' +
         '<section class="odc-readout" aria-label="Readout"></section>' +
+        '<section class="odc-more" aria-label="Armour and the stock hull"></section>' +
       '</div>' +
       '<footer class="odc-foot"><div class="odc-issues" aria-live="polite"></div><div class="odc-actions">' +
         (options.onFly ? '<button class="primary" data-act="fly" data-tip="odc_fly">Fly this design</button>' : '') +
@@ -1112,7 +1136,9 @@
       '</div></footer>';
     const $ = (sel) => root.querySelector(sel);
     const $$ = (sel) => Array.from(root.querySelectorAll(sel));
-    const controlsEl = $('.odc-controls'), readoutEl = $('.odc-readout'), canvas = $('.odc-canvas'), sayEl = $('.odc-say'), sayLine = $('.odc-say-line'), issuesEl = $('.odc-issues');
+    const controlsEl = $('.odc-controls'), readoutEl = $('.odc-readout'), moreEl = $('.odc-more'), canvas = $('.odc-canvas'), sayEl = $('.odc-say'), sayLine = $('.odc-say-line'), issuesEl = $('.odc-issues');
+    // the Delete key's arming (see the click handler): its timer, what the note says, and the engineer's line it covered
+    let delArmed = 0, delNote = '', delSaid = null;
 
     // ---------------------------------------------------------------- controls
     function controlsHTML() {
@@ -1132,8 +1158,9 @@
       for (const g of GROUPS) {
         const n = B.slots[g];
         for (let i = 0; i < n; i++) {
-          h += '<div class="odc-row slot"><span class="k">' + GROUP_LABEL[g] + (n > 1 ? ' ' + (i + 1) : '') + '</span><select data-slot="' + g + i + '" data-group="' + g + '" aria-label="' + GROUP_LABEL[g] + ' ' + (i + 1) + '"><option value="">— empty —</option>' +
-            catForSlot(g).map((c) => '<option value="' + c.id + '">' + esc(c.label) + ' · ' + U.fmt.mass(catMass(c)).replace(' ', '') + (catDraw(c) >= 1e6 ? ' · ' + U.fmt.power(catDraw(c)).replace(' ', '') : '') + '</option>').join('') + '</select></div>';
+          // the slot's name sits over its menu, so the menu has the column's full width for "Point-defence laser, heavy · 10 t · 2.5 MW"
+          h += '<div class="odc-row slot stack"><span class="k">' + GROUP_LABEL[g] + (n > 1 ? ' ' + (i + 1) : '') + '</span><select data-slot="' + g + i + '" data-group="' + g + '" aria-label="' + GROUP_LABEL[g] + ' ' + (i + 1) + '"><option value="">— empty —</option>' +
+            catForSlot(g).map((c) => '<option value="' + c.id + '">' + esc(c.label) + ' · ' + U.fmt.mass(catMass(c)) + (catDraw(c) >= 1e6 ? ' · ' + U.fmt.power(catDraw(c)) : '') + '</option>').join('') + '</select></div>';
         }
       }
       h += '<div class="odc-note" data-val="fitnote"></div></div>';
@@ -1177,7 +1204,7 @@
       h += '<div class="odc-sec"><h4 data-tip="odc_power">Power</h4><div class="odc-kv"><span class="k">Fittings firing</span><span class="v ' + (pr > 1 ? 'crit' : pr > 0.85 ? 'warn' : 'good') + '">' + U.fmt.power(a.power.draw) + ' of ' + U.fmt.power(d.reactorPower) + ' · ' + Math.round(pr * 100) + ' %</span></div>' +
         '<div class="odc-bar"><i style="width:' + Math.min(100, pr * 100).toFixed(1) + '%;background:' + (pr > 1 ? 'var(--crit, #ff6b6b)' : 'linear-gradient(90deg, #8f7ce6, #b8aaff)') + '"></i>' + (pr > 1 ? '<b style="left:' + (100 / pr).toFixed(1) + '%"></b>' : '') + '</div></div>';
       // heat
-      h += '<div class="odc-sec"><h4 data-tip="odc_heat">Heat</h4><div class="odc-heat">' + a.heat.map((r) => '<div class="hr"><span class="k">' + r.label + '</span><span class="v ' + (r.net <= 0 ? 'good' : r.saturate < 300 ? 'crit' : r.saturate < 1200 ? 'warn' : '') + '">' + (r.net <= 0 ? (r.settle != null ? 'settles at ' + Math.round(r.settle * 100) + ' %' : 'steady') : 'sink full in ' + U.fmt.time(r.saturate)) + '</span><span class="m">' + U.fmt.power(r.in) + ' made · ' + U.fmt.power(r.out) + ' radiated' + (r.start > 0.01 ? ' · from ' + Math.round(r.start * 100) + ' %' : '') + '</span></div>').join('') + '</div></div>';
+      h += '<div class="odc-sec"><h4 data-tip="odc_heat">Heat</h4><div class="odc-heat">' + a.heat.map((r) => '<div class="hr"><span class="k">' + r.label + '</span><span class="v ' + (r.net <= 0 ? 'good' : r.saturate < 300 ? 'crit' : r.saturate < 1200 ? 'warn' : '') + '">' + (r.net <= 0 ? (r.settle != null ? 'settles at ' + Math.round(r.settle * 100) + ' %' : 'steady') : 'sink full in ' + U.fmt.time(r.saturate)) + '</span><span class="m"><span>' + U.fmt.power(r.in) + ' made</span> · <span>' + U.fmt.power(r.out) + ' radiated</span>' + (r.start > 0.01 ? ' · <span>from ' + Math.round(r.start * 100) + ' %</span>' : '') + '</span></div>').join('') + '</div></div>';
       // moving
       h += '<div class="odc-sec"><h4 data-tip="odc_dash">Moving</h4><div class="odc-kv">' +
         '<span class="k">' + U.fmt.dist(DASH) + ' dash</span><span class="v">' + U.fmt.time(a.dash.time) + ' · ' + U.fmt.dv(a.dash.dv) + '</span>' +
@@ -1191,29 +1218,43 @@
       for (const r of a.reach) { const g = grouped.find((x) => x.text === r.text && x.kind === r.kind); if (g) { g.n++; g.names.push(r.name); } else grouped.push({ kind: r.kind, text: r.text, n: 1, names: [r.name] }); }
       const gname = (g) => (g.n === 1 ? g.names[0] : g.names[0].replace(/ (?:[A-Z]|\d+)$/, '') + ' ×' + g.n);
       h += '<div class="odc-sec" data-adv><h4 data-tip="odc_reach">Reach</h4><div class="odc-reach">' + (grouped.length ? grouped.map((r) => '<div><b>' + esc(gname(r)) + '</b><span>' + esc(r.text) + '</span></div>').join('') : '<div><span>Nothing fitted.</span></div>') + '</div></div>';
-      // armour
+      // armour, and against the stock hull: carried under the picture in the middle column (odc-more)
+      let m = '';
       const mx = Math.max(1, d.armour.nose, d.armour.flank, d.armour.tail);
       const fillA = (cm) => 'rgba(214,220,228,' + (0.12 + 0.7 * (cm / mx)).toFixed(2) + ')';
-      h += '<div class="odc-sec"><h4 data-tip="odc_facing">Armour</h4><div class="odc-facing"><svg viewBox="0 0 96 48" aria-hidden="true"><polygon points="4,14 20,14 20,34 4,34" style="fill:' + fillA(d.armour.tail) + '"/><polygon points="20,10 64,10 64,38 20,38" style="fill:' + fillA(d.armour.flank) + '"/><polygon points="64,12 92,24 64,36" style="fill:' + fillA(d.armour.nose) + '"/></svg>' +
+      m += '<div class="odc-sec"><h4 data-tip="odc_facing">Armour</h4><div class="odc-facing"><svg viewBox="0 0 96 48" aria-hidden="true"><polygon points="4,14 20,14 20,34 4,34" style="fill:' + fillA(d.armour.tail) + '"/><polygon points="20,10 64,10 64,38 20,38" style="fill:' + fillA(d.armour.flank) + '"/><polygon points="64,12 92,24 64,36" style="fill:' + fillA(d.armour.nose) + '"/></svg>' +
         '<div class="odc-kv"><span class="k">Nose</span><span class="v">' + d.armour.nose + ' cm</span><span class="k">Flank</span><span class="v">' + d.armour.flank + ' cm</span><span class="k">Tail</span><span class="v">' + d.armour.tail + ' cm</span><span class="k">Armour mass</span><span class="v">' + U.fmt.mass(d.masses.armour) + '</span></div></div></div>';
       // against stock
       const row = (k, v1, v2) => '<tr><td>' + k + '</td><td>' + v1 + '</td><td>' + v2 + '</td></tr>';
-      h += '<div class="odc-sec" data-adv><h4 data-tip="odc_compare">Against the stock ' + esc(CLASSES()[d.base].name.split('-')[0]) + '</h4><table class="odc-cmp"><tr><th>Measure</th><th>This</th><th>Stock</th></tr>' +
+      m += '<div class="odc-sec" data-adv><h4 data-tip="odc_compare">Against the stock ' + esc(CLASSES()[d.base].name.split('-')[0]) + '</h4><table class="odc-cmp"><tr><th>Measure</th><th>This</th><th>Stock</th></tr>' +
         row('Delta-v', U.fmt.dv(a.dv), U.fmt.dv(as.dv)) + row('Acceleration', a.g.toFixed(2) + ' g', as.g.toFixed(2) + ' g') + row('Loaded mass', U.fmt.mass(a.mass), U.fmt.mass(as.mass)) + row('Heat shed', U.fmt.power(a.heatOut), U.fmt.power(as.heatOut)) +
         row('Full burn, sink full', a.heat[1].net <= 0 ? 'never' : U.fmt.time(a.heat[1].saturate), as.heat[1].net <= 0 ? 'never' : U.fmt.time(as.heat[1].saturate)) + row('180° turn', U.fmt.time(a.turn180), U.fmt.time(as.turn180)) + row('Fittings', d.comps.length + ' · ' + U.fmt.power(a.power.draw), s.comps.length + ' · ' + U.fmt.power(as.power.draw)) + row('Cost', a.cost + ' rp', as.cost + ' rp') + '</table></div>';
-      return h;
+      return [h, m];
     }
-    function renderReadout() { readoutEl.innerHTML = readoutHTML(); }
+    function renderReadout() { const r = readoutHTML(); readoutEl.innerHTML = r[0]; moreEl.innerHTML = r[1]; }
     function renderIssues() {
       const a = analyse(design);
       const advice = (t) => (detail === 'essentials' ? t.replace('Fix it with more radiator area, a bigger sink or a smaller drive.', 'Fix it with more radiator area or a smaller drive. The heat sink slider is under Full.') : t);
-      issuesEl.innerHTML = a.issues.length ? a.issues.map((i) => '<div class="odc-issue ' + i.level + '">' + esc(advice(i.text)) + '</div>').join('') : '<div class="odc-issue note">Flight-ready. ' + esc(design.blurb) + '</div>';
+      // while Delete is armed, the line beside the keys says what it deletes: on a phone the engineer's box is a screen away
+      issuesEl.innerHTML = delNote ? '<div class="odc-issue block">' + esc(delNote) + '</div>'
+        : a.issues.length ? a.issues.map((i) => '<div class="odc-issue ' + i.level + '">' + esc(advice(i.text)) + '</div>').join('') : '<div class="odc-issue note">Flight-ready. ' + esc(design.blurb) + '</div>';
       const fly = $('[data-act="fly"]');
       if (fly) { fly.disabled = a.blocked; fly.title = a.blocked ? 'Fix the power budget first' : ''; }
       const del = $('[data-act="delete"]'); if (del) del.disabled = !saved;
     }
+    // the name field is as wide as the name, so "-class frigate" follows it the way the words are said
+    let nameCtx = null;
+    function sizeName() {
+      const inp = $('.odc-nameinput'); if (!inp) return;
+      const cs = getComputedStyle(inp);
+      nameCtx = nameCtx || document.createElement('canvas').getContext('2d');
+      nameCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      const text = inp.value || 'W', ls = parseFloat(cs.letterSpacing) || 0;
+      inp.style.width = Math.ceil(nameCtx.measureText(text).width + ls * text.length + 5) + 'px';
+    }
     function renderHeader() {
       $('.odc-nameinput').value = params.name;
+      sizeName();
       $('.odc-cls').textContent = '-class ' + CLASSES()[params.base].role;
       const pill = $('.odc-state-pill');
       pill.textContent = dirty ? 'unsaved' : saved ? 'saved' : 'new';
@@ -1229,7 +1270,9 @@
       const all = records();
       sel.innerHTML = '<option value="">' + (all.length ? all.length + ' saved design' + (all.length > 1 ? 's' : '') + '…' : 'No saved designs') + '</option>' + all.map((r) => '<option value="' + esc(r.id) + '"' + (r.id === id && saved ? ' selected' : '') + '>' + esc(r.name) + '</option>').join('');
     }
-    function say(text, tone) { sayLine.textContent = text; sayEl.dataset.tone = tone || ''; }
+    // a number keeps its unit on its line ("2.5 MW", "36 %"): the space between them does not break
+    const KEEP_UNIT = /(\d) (?=(?:%|kt|kg|km\/s|m\/s|km|cm|m²|[kMG]?[WJN]|[tmsKg])(?![\w²]))/g;
+    function say(text, tone) { sayLine.textContent = text.replace(KEEP_UNIT, '$1\u00a0'); sayEl.dataset.tone = tone || ''; }
     function toast(text) {
       let t = $('.odc-toast');
       if (!t) { t = document.createElement('div'); t.className = 'odc-toast'; root.appendChild(t); }
@@ -1239,11 +1282,14 @@
 
     // ---------------------------------------------------------------- the picture
     let artOk = null;
+    function setKey(text) { const k = $('.odc-key'); if (!k) return; k.textContent = text; k.hidden = !text; }
+    function scheduleDraw() { if (!raf && !destroyed) raf = requestAnimationFrame(drawStage); }
     function drawStage() {
       raf = 0;
       if (destroyed) return;
       const rect = canvas.getBoundingClientRect();
-      const W = Math.max(300, Math.round(rect.width || canvas.parentNode.clientWidth || 640)), H = Math.round(W * 10 / 16);
+      const W = Math.max(300, Math.round(rect.width || canvas.parentNode.clientWidth || 640));
+      const H = Math.max(180, Math.round(rect.height && rect.width ? rect.height * (W / rect.width) : W * 10 / 16));
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
       const ctx = canvas.getContext('2d');
@@ -1255,14 +1301,24 @@
         const t = (performance.now() - t0) / 1000;
         const A = OD.ShipArt, base = A && A.VIEWS && A.VIEWS[view];
         const viewArg = pose.spin && base ? { az: base.az + t * 18, el: base.el } : view;
-        const size = Math.min(W * 0.72, H * 1.6);
-        const o = { x: W / 2, y: H / 2, size, view: viewArg, faction, light: { az: -50, el: 35 }, state: { radiators: pose.radiators, throttle: pose.throttle, heat: pose.heat }, plume: true, time: t, cache: !pose.spin };
+        // the part labels take a band above and below the hull; the hull fills what is left of the box
+        const labelsOn = !!(pose.labels && detail === 'full');
+        const box = artBox(viewArg);
+        const plan = labelsOn && box ? calloutPlan(ctx, W, viewArg, box) : null;
+        const capH = 22, pad = 12;
+        const top = pad + (plan ? plan.bandTop : 0), bottom = H - capH - (plan ? plan.bandBottom : 0);
+        let o = null;
+        if (box) {
+          const k = Math.min((W - 2 * pad) / (box.maxX - box.minX), Math.max(20, bottom - top) / (box.maxY - box.minY));
+          o = { x: W / 2 - ((box.minX + box.maxX) / 2) * k, y: (top + bottom) / 2 - ((box.minY + box.maxY) / 2) * k, size: ART_PROBE * k };
+        } else o = { x: W / 2, y: H / 2, size: Math.min(W * 0.72, H * 1.6) };
+        Object.assign(o, { view: viewArg, faction, light: { az: -50, el: 35 }, state: { radiators: pose.radiators, throttle: pose.throttle, heat: pose.heat }, plume: true, time: t, cache: !pose.spin });
         ctx.save();
         const ok = drawArt(ctx, design, o);
         if (ok) {
           ctx.restore();
-          if (pose.labels && detail === 'full') drawCallouts(ctx, W, H, o);
-          cap.textContent = 'RENDERED · ' + view.toUpperCase() + ' · ' + design.length + ' m'; artOk = true; setKey('');
+          if (plan) drawCallouts(ctx, W, o, plan, top, bottom);
+          cap.textContent = 'RENDERED · ' + (VIEW_NAME[view] || view).toUpperCase() + ' · ' + design.length + ' m'; artOk = true; setKey('');
           if (pose.throttle > 0 || pose.spin) scheduleDraw();
           return;
         }
@@ -1270,16 +1326,36 @@
         for (let i = 0; i < 24; i++) ctx.restore();   // unwind whatever the art module left on the stack
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
         drawBlueprint(ctx, W, H, design, st, root, { caption: false });
-        cap.textContent = 'Blueprint shown. The rendered ' + view + ' view needs the ship-art module.'; setKey('');
+        cap.textContent = 'Blueprint shown. The rendered ' + (VIEW_NAME[view] || view) + ' view needs the ship-art module.'; setKey('');
         return;
       }
       const bp = drawBlueprint(ctx, W, H, design, st, root, {});
       cap.textContent = '';
       setKey(bp && !bp.keyDrawn && bp.key.length ? bp.key.join(' · ') : '');
     }
-    function setKey(text) { const k = $('.odc-key'); if (!k) return; k.textContent = text; k.hidden = !text; }
-    function scheduleDraw() { if (!raf && !destroyed) raf = requestAnimationFrame(drawStage); }
-    // part labels from the ship-art module, laid out down both margins with leaders to the part
+    // The picture's extent around the ship's origin at a probe size: the hull with its radiators as posed, no
+    // plume. With the orbit camera on it is the extent over a full turn, so the hull keeps one size as it turns.
+    const ART_PROBE = 120;
+    let boxKey = '', boxVal = null;
+    function artBox(viewArg) {
+      const A = OD.ShipArt;
+      if (!A || typeof A.bounds !== 'function') return null;
+      const spin = typeof viewArg === 'object';
+      const key = design.id + '@' + design.rev + '|' + (spin ? 'orbit:' + view : view) + '|' + pose.radiators;
+      if (key === boxKey) return boxVal;
+      const views = spin ? [0, 45, 90, 135, 180, 225, 270, 315].map((az) => ({ az, el: viewArg.el })) : [viewArg];
+      let b = null;
+      try {
+        for (const v of views) {
+          const r = A.bounds(design, { size: ART_PROBE, view: v, faction, state: { radiators: pose.radiators }, quality: 'low' });
+          if (!r || !(r.w > 0) || !(r.h > 0)) continue;
+          const e = { minX: -r.ox, maxX: r.w - r.ox, minY: -r.oy, maxY: r.h - r.oy };
+          b = b ? { minX: Math.min(b.minX, e.minX), maxX: Math.max(b.maxX, e.maxX), minY: Math.min(b.minY, e.minY), maxY: Math.max(b.maxY, e.maxY) } : e;
+        }
+      } catch (e) { b = null; }
+      boxKey = key; boxVal = b;
+      return b;
+    }
     // the art module names parts its own way; the yard shows them under the names the fittings list uses
     function yardLabel(c) {
       const comps = design.comps;
@@ -1298,26 +1374,78 @@
         default: return c.label;
       }
     }
-    function drawCallouts(ctx, W, H, o) {
+    // Part labels go in rows above and below the hull, each on a leader to its part: the parts in the upper
+    // half of the picture label upward, the rest downward. The plan measures the labels and counts the rows.
+    const CALL_ROW = 13;
+    function calloutPlan(ctx, W, viewArg, box) {
       let list = [];
-      try { list = (OD.ShipArt.callouts(design, o) || []).map((c) => Object.assign({}, c, { label: yardLabel(c) })); } catch (e) { list = []; }
-      if (!list.length) return;
+      try { list = (OD.ShipArt.callouts(design, { size: ART_PROBE, view: viewArg }) || []).map((c) => { const label = yardLabel(c); return { label, own: label !== c.label || c.label === 'Radiators', x: c.x, y: c.y }; }); } catch (e) { list = []; }
+      if (!list.length) return null;
       const mono = cssVar(root, '--mono', '') || 'ui-monospace, Menlo, monospace';
-      ctx.save(); ctx.font = '10.5px ' + mono; ctx.textBaseline = 'middle';
-      const left = list.filter((c) => c.x <= 0).sort((a, b) => a.y - b.y), right = list.filter((c) => c.x > 0).sort((a, b) => a.y - b.y);
-      const col = (items, side) => {
-        const n = items.length; if (!n) return;
-        const step = Math.min(15, (H - 40) / Math.max(1, n));
-        const y0 = H / 2 - ((n - 1) * step) / 2;
-        items.forEach((c, i) => {
-          const ty = y0 + i * step, tx = side < 0 ? 10 : W - 10;
-          const px = o.x + c.x, py = o.y + c.y;
-          ctx.strokeStyle = 'rgba(180,192,207,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(side < 0 ? tx + ctx.measureText(c.label).width + 6 : tx - ctx.measureText(c.label).width - 6, ty); ctx.stroke();
-          ctx.fillStyle = 'rgba(180,192,207,0.5)'; ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = cssVar(root, '--ink-2', '#b1bfce'); ctx.textAlign = side < 0 ? 'left' : 'right'; ctx.fillText(c.label, tx, ty);
-        });
-      };
-      col(left, -1); col(right, 1);
+      const font = (W < 400 ? '10px ' : '10.5px ') + mono;
+      ctx.save(); ctx.font = font;
+      for (const c of list) c.w = Math.ceil(ctx.measureText(c.label).width);
+      ctx.restore();
+      // under 480 px only the parts the yard's choices set are labelled (drive, tanks, radiators, reactor, armour
+      // and the fittings); the structure names are left to the wider screen
+      if (W < 480) list = list.filter((c) => c.own);
+      // the upper parts label upward and the lower ones downward, split where both bands carry the same width of text
+      list.sort((a, c) => a.y - c.y);
+      const total = list.reduce((s, c) => s + c.w, 0);
+      let cut = 0, run = 0, best = Infinity;
+      for (let i = 0; i <= list.length; i++) { const d = Math.abs(total - 2 * run); if (d < best) { best = d; cut = i; } if (i < list.length) run += list[i].w; }
+      const up = list.slice(0, cut), down = list.slice(cut);
+      for (const c of up) c.band = 0; for (const c of down) c.band = 1;
+      const rowsFor = (items) => (items.length ? Math.min(4, Math.ceil((items.reduce((s, c) => s + c.w + 14, 0) / (W - 8)) * 1.2)) : 0);
+      let rowsUp = rowsFor(up), rowsDown = rowsFor(down);
+      if (typeof viewArg === 'object') rowsUp = rowsDown = Math.max(rowsFor(list.slice(0, Math.ceil(list.length / 2))), rowsFor(list), 1);   // turning: parts cross from one band to the other
+      const band = (n) => (n ? n * CALL_ROW + 10 : 0);
+      return { list, font, rowsUp, rowsDown, bandTop: band(rowsUp), bandBottom: band(rowsDown) };
+    }
+    function drawCallouts(ctx, W, o, plan, top, bottom) {
+      const k = o.size / ART_PROBE;
+      const pts = plan.list.map((c) => ({ label: c.label, w: c.w, band: c.band, px: o.x + c.x * k, py: o.y + c.y * k }));
+      const bands = [
+        { items: pts.filter((p) => p.band === 0), rows: plan.rowsUp, y0: top - 6 - 4, dir: -1 },
+        { items: pts.filter((p) => p.band === 1), rows: plan.rowsDown, y0: bottom + 6 + 4, dir: 1 },
+      ];
+      // a band with no rows hands its labels to the other
+      if (!bands[0].rows) { bands[1].items = pts; bands[0].items = []; } else if (!bands[1].rows) { bands[0].items = pts; bands[1].items = []; }
+      const placed = [];
+      for (const b of bands) {
+        const rows = Array.from({ length: b.rows }, () => []);
+        b.items.sort((a, c) => a.px - c.px);
+        for (const it of b.items) {
+          const want = Math.min(W - 4 - it.w, Math.max(4, it.px - it.w / 2));
+          let best = null;
+          rows.forEach((row, r) => {
+            // free stretches of this row, and the spot in them nearest the part
+            const taken = row.slice().sort((a, c) => a[0] - c[0]);
+            let from = 4;
+            for (let i = 0; i <= taken.length; i++) {
+              const to = i < taken.length ? taken[i][0] - 10 : W - 4;
+              if (to - from >= it.w) {
+                const x = Math.min(to - it.w, Math.max(from, want));
+                const cost = Math.abs(x - want) + r * 28;
+                if (!best || cost < best.cost) best = { cost, r, x };
+              }
+              if (i < taken.length) from = taken[i][1] + 10;
+            }
+          });
+          if (!best) continue;   // no room left in the band: the label is left out rather than printed over another
+          rows[best.r].push([best.x, best.x + it.w]);
+          placed.push({ it, x: best.x, y: b.y0 + b.dir * best.r * CALL_ROW, dir: b.dir });
+        }
+      }
+      ctx.save(); ctx.font = plan.font; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.strokeStyle = 'rgba(180,192,207,0.35)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (const p of placed) { const ax = Math.min(p.x + p.it.w - 2, Math.max(p.x + 2, p.it.px)); ctx.moveTo(p.it.px, p.it.py); ctx.lineTo(ax, p.y - p.dir * 6); }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(180,192,207,0.6)';
+      for (const p of placed) { ctx.beginPath(); ctx.arc(p.it.px, p.it.py, 1.8, 0, Math.PI * 2); ctx.fill(); }
+      const ink2 = cssVar(root, '--ink-2', '#b1bfce');
+      ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(4,7,12,0.85)'; ctx.fillStyle = ink2;
+      for (const p of placed) { ctx.strokeText(p.it.label, p.x, p.y); ctx.fillText(p.it.label, p.x, p.y); }
       ctx.restore();
     }
 
@@ -1358,7 +1486,7 @@
       } else if (t.matches('[data-look]')) {
         const before = design; params.look = params.look || {}; params.look[t.dataset.look] = t.value; afterChange('look', before);
       } else if (t.matches('.odc-nameinput')) {
-        params.name = t.value.trim().slice(0, 24) || params.name; design = derive(params, id); dirty = true; $('.odc-cls').textContent = '-class ' + CLASSES()[params.base].role; renderIssues();
+        params.name = t.value.trim().slice(0, 24) || params.name; design = derive(params, id); dirty = true; sizeName(); $('.odc-cls').textContent = '-class ' + CLASSES()[params.base].role; renderIssues();
         const pill = $('.odc-state-pill'); pill.textContent = 'unsaved'; pill.className = 'odc-pill odc-state-pill warn';
       } else if (t.matches('[data-pose]')) {
         const k = t.dataset.pose;
@@ -1367,13 +1495,36 @@
         scheduleDraw();
       }
     });
+    // Delete asks once: the first press arms the key and says what goes, a second press within five seconds deletes
+    // what the second press takes: the design, and the campaign ships built to it (the campaign strikes them off)
+    function deleteNote() {
+      let built = null;
+      try { const st = OD.Campaign && typeof OD.Campaign.load === 'function' ? OD.Campaign.load() : null; if (OD.Campaign) built = st && st.fleet ? st.fleet.filter((f) => f.cls === id) : []; } catch (e) { built = null; }
+      const what = built == null ? ' and every campaign ship built to it'
+        : built.length === 1 ? ' and ' + built[0].name + ', the campaign ship built to it'
+        : built.length > 1 ? ' and the ' + built.length + ' campaign ships built to it' : '';
+      const rec = records().find((r) => r.id === id);   // the saved name, which an edit in the name field has not changed yet
+      const name = rec ? rec.name + '-class ' + CLASSES()[rec.base].role : design.name;
+      return 'This deletes the ' + name + what + '. Press Confirm delete within 5 s.';
+    }
+    function disarmDelete() {
+      clearTimeout(delArmed); delArmed = 0;
+      const d = $('[data-act="delete"]'); if (d) { d.textContent = 'Delete'; d.classList.remove('armed'); }
+      // both lines go back to what they said before the key was armed (the engineer's only if nothing has spoken since)
+      if (!delNote) return;
+      if (delSaid && sayLine.textContent === delSaid.shown) { sayLine.textContent = delSaid.text; sayEl.dataset.tone = delSaid.tone; }
+      delNote = ''; delSaid = null;
+      if (!destroyed) renderIssues();
+    }
     listen('change', (e) => {
+      if (delArmed) disarmDelete();
       const t = e.target;
       if (t.matches('.odc-saved')) { if (t.value && loadDesign(t.value)) refreshAll('Loaded ' + design.name + ': ' + design.blurb); }
       else if (t.matches('.odc-nameinput')) { params.name = normaliseParams(params).name; design = derive(params, id); renderHeader(); }
     });
     listen('click', (e) => {
       const b = e.target.closest('button'); if (!b || !root.contains(b)) return;
+      if (delArmed && b.dataset.act !== 'delete') disarmDelete();
       if (b.dataset.base) { setBase(b.dataset.base); return; }
       if (b.dataset.detail) { detail = b.dataset.detail; root.dataset.detail = detail; try { localStorage.setItem('od.detail', detail); } catch (e) { /* per-viewer only */ } renderHeader(); renderIssues(); scheduleDraw(); return; }
       if (b.dataset.view) { view = b.dataset.view; renderHeader(); scheduleDraw(); return; }
@@ -1382,7 +1533,15 @@
       else if (act === 'random') { const before = design; randomise(); afterChange('random', before); say('A random fit on the ' + CLASSES()[params.base].name + '. ' + explain('random', before, design), ''); }
       else if (act === 'save') { doSave(false); }
       else if (act === 'saveas') { doSave(true); }
-      else if (act === 'delete') { if (!saved) return; if (!window.confirm('Delete ' + design.name + '?')) return; remove(id); const rest = records(); if (!(rest.length && loadDesign(rest[0].id))) { freshDesign(params.base); refreshSaved(); } refreshAll('Deleted. ' + (saved ? 'Now showing ' + design.name + '.' : 'A fresh ' + CLASSES()[params.base].name + '.')); toast('Design deleted'); }
+      else if (act === 'delete') {
+        if (!saved) return;
+        if (!delArmed) {
+          b.textContent = 'Confirm delete'; b.classList.add('armed');
+          delNote = deleteNote().replace(KEEP_UNIT, '$1\u00a0'); delSaid = { text: sayLine.textContent, tone: sayEl.dataset.tone || '' };
+          say(delNote, 'crit'); delSaid.shown = sayLine.textContent; renderIssues();
+          delArmed = setTimeout(disarmDelete, 5000); return;
+        }
+        disarmDelete(); remove(id); const rest = records(); if (!(rest.length && loadDesign(rest[0].id))) { freshDesign(params.base); refreshSaved(); } refreshAll('Deleted. ' + (saved ? 'Now showing ' + design.name + '.' : 'A fresh ' + CLASSES()[params.base].name + '.')); toast('Design deleted'); }
       else if (act === 'fly') { const a = analyse(design); if (a.blocked) { toast(a.issues.find((i) => i.level === 'block').text); return; } doSave(false, true); const sc = flyScenario(design, { faction }); if (options.onFly) options.onFly(design, sc); }
       else if (act === 'copy') { const code = JSON.stringify({ odc: 1, params: normaliseParams(params) }); const done = () => toast('Design code copied'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, () => window.prompt('Copy this design code:', code)); else window.prompt('Copy this design code:', code); }
       else if (act === 'paste') { const s = window.prompt('Paste a design code:'); if (!s) return; try { const o = JSON.parse(s); const p = normaliseParams(o.params || o); const before = design; params = p; design = derive(params, id); dirty = true; buildControls(); renderReadout(); renderIssues(); renderHeader(); scheduleDraw(); say('Design code loaded. ' + explain('paste', before, design), ''); } catch (err) { toast('That is not a design code.'); } }
@@ -1413,12 +1572,14 @@
     // ---------------------------------------------------------------- go
     function fitWidth() { const w = root.clientWidth || (root.getBoundingClientRect().width | 0) || 1200; root.classList.toggle('odc-narrow', w < 720); root.classList.toggle('odc-mid', w >= 720 && w < 1140); }
     fitWidth();
-    if (typeof ResizeObserver === 'function') { resizeObs = new ResizeObserver(() => { fitWidth(); scheduleDraw(); }); resizeObs.observe(root); resizeObs.observe(canvas.parentNode); }
+    if (typeof ResizeObserver === 'function') { resizeObs = new ResizeObserver(() => { fitWidth(); sizeName(); scheduleDraw(); }); resizeObs.observe(root); resizeObs.observe(canvas.parentNode); }
     else window.addEventListener('resize', () => { fitWidth(); scheduleDraw(); }, ac ? { signal: ac.signal } : false);
     if (artCanDraw(design)) view = 'threequarter';
     refreshAll();
     say((saved ? 'Loaded ' + design.name + '. ' : 'A new design on the ' + CLASSES()[params.base].name + '. ') + 'Every slider moves the numbers and the drawing. This line says what the change bought and what it cost. ' + design.blurb, '');
     $('.odc-artnote').textContent = artCanDraw(design) ? '' : 'Rendered views need the ship-art module. The blueprint is exact.';
+    // the display face may arrive after the first paint: measure the name again, and draw again with it
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!destroyed) { sizeName(); scheduleDraw(); } });
 
     const ctl = {
       design: () => design,
@@ -1429,7 +1590,7 @@
       pose: (p) => { Object.assign(pose, p || {}); scheduleDraw(); },
       view: (v) => { view = v; renderHeader(); scheduleDraw(); },
       draw: () => drawStage(),
-      destroy: () => { destroyed = true; if (ac) ac.abort(); if (raf) cancelAnimationFrame(raf); if (resizeObs) resizeObs.disconnect(); clearTimeout(toastTimer); if (tipEl) tipEl.hidden = true; root.innerHTML = ''; root.classList.remove('odc', 'odc-mid', 'odc-narrow'); if (root._odc === ctl) delete root._odc; },
+      destroy: () => { destroyed = true; clearTimeout(delArmed); if (ac) ac.abort(); if (raf) cancelAnimationFrame(raf); if (resizeObs) resizeObs.disconnect(); clearTimeout(toastTimer); if (tipEl) tipEl.hidden = true; root.innerHTML = ''; root.classList.remove('odc', 'odc-mid', 'odc-narrow'); if (root._odc === ctl) delete root._odc; },
     };
     root._odc = ctl;
     return ctl;

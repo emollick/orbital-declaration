@@ -1859,3 +1859,102 @@ the selected ship); campaign experience is granted after an abandoned fight; thr
 with Amalthea on it, a clamped threat label over the corner block at close zoom, the comms banner 5 px into the
 phone panel); the radiators card can open lowercase and the repair card capitalises mid-line. Chapter 2 with no card
 answered is lost by design (the approach and range cards do not settle: the player flies the ship).
+
+## Graphics and polish (v15, 2026-09-22 21:45 UTC to 2026-09-23; Ethan: "one more graphic and polish pass with opus")
+
+Defaults taken: "graphics" is the look of everything the player sees (the map and ships at every zoom, hull view,
+portrait, bridge panels, console screens, hangar, configurator, effects, phone and laptop, one palette and one
+type); "polish" is rough edges (alignment, spacing, hints, small wording faults, the carried v14 polish items), not
+new mechanics. No combat, sensor, crew or physics number changed and no number a screen shows changed meaning; every
+visual follows sim state. One writer per file: render.js, bridge.js, ui.js with index.html, configurator.js with
+campaign.js went to Opus workers, one each, in two waves; the thread kept story.js, guide.js, main.js, util.js,
+decisions.js, autopilot.js, engagement.js (one guard), the ship art core and SPEC.md.
+
+Survey: 28 screens at 1440×900 and 390×844 plus close probes (skirmish, chapters 3, 5, 7, 8), ranked into 13 visible
+faults and 5 look upgrades. The full change list, as built, is scratchpad CHANGES-v15.md; in short:
+
+- The map: a contact carries an error bar from the sensor model (±range error along the line of sight, bearing
+  error across it at that range, solid near the glyph, then dashed and fading, end ticks bright) in place of the pale
+  searchlight wedge that read as a beam; no lens streak; a body off the clear map is a limb arc with an edge label
+  ("JUPITER / JCS Harkness at altitude 181 000 km", on a phone "JUPITER · JCS Harkness 181 000 km up"); labels treat
+  contact glyphs, bar ends and hulls as obstacles and drop lines before covering one; threat labels and chevrons
+  stay in the clear map; a 12 px ring for the chapter 1 marker; the scale bar and its number together; brackets,
+  pulses and sweeps hold still while paused; a selected hostile shows no plotted path (her orders are not ours to
+  read).
+- Panels: the map key has its own row and folds (Hide/Show, remembered; a folded row on the phone); a hull with no
+  drive says "no drive" and drops the rows that printed NaN; hull view headers never clip and part labels go where
+  the hull draws largest with no crossing leaders; long values wrap under their label; grouped numbers and
+  percentages never split; the log fits its lines and names every speaker; the phone keys are 40 px or more; the
+  salvo banner counts every launch at one ship; decision banners speak like comms lines; "Altitude X to Y" (or
+  "X, circular") where the panel and navigator said "Orbit X × Y" for the same heights.
+- Console and DOM screens: every DOM screen but the hull view sits in the bridge frame (corner brackets, header
+  strip with SND, AA and Close, the tick ruler, uppercase titles); the chapters screen has a to-scale chart of the
+  Jovian system with a numbered key at each chapter's place; the skirmish screen draws both fleets to one scale with
+  class captions; the hangar draws the hull 1.25 to 1.7 times larger with labels in lanes; the demo scene keeps off
+  the hero picture and text; no keyboard hints on a touch screen.
+- Yard and campaign: captions and fitting options in full, balanced columns, two-press delete and restart whose
+  keys and notes agree; campaign labels clear of Jupiter and of each other; unaffordable routes in amber with one
+  line saying why.
+- Words: the contact is described as a line, not a ring (help, chapter 2); chapter 3's brief says the frigates open
+  fire when you arrive; chapters 7 and 8 give their altitude ("400 000 km above the planet"; "181 000 km above
+  Jupiter, 70 000 km outside Amalthea's orbit", which is where the sim has always flown chapter 8); "switch to Hold"
+  on a dead target; no full stop before a card's ship count; tour step 2 says "Tap Intercept" on a phone.
+
+### Review round 1 (22:59 UTC 2026-09-22 to 00:05 UTC 2026-09-23; six Opus reviewers, reports scratchpad/review/<lens>/round1-v15.md)
+
+Six blocking findings, all fixed: the chart placed chapters 7 and 8 by distance from Jupiter's centre where the
+story and the sim use altitude (the fix adds Jupiter's radius; the chart caption says it measures from the centre);
+help and a hint described a ring the map no longer draws; chapter 6 opened on an empty 5 km map when its first hint
+appeared (a refit on one watched hull zoomed to the camera's 10 km floor: one hull is now panned, only a group is
+fitted); labels covered contact glyphs; the phone chapter rows overlapped once a location wrapped; the phone map key
+row printed over an edge label. Twenty major findings, seventeen fixed; the dispositions, one line each, are in
+scratchpad review/round1-dispositions.md.
+
+### Review round 2 (00:25 to 01:00 UTC 2026-09-23; the same six lenses, reports scratchpad/review/<lens>/round2-v15.md)
+
+Three blocking findings, all fixed. On a phone a fit centred on the whole canvas when the clear strip was under a
+quarter of its height, so our ship was framed under her panel or an open card (chapter 1 step 1 named the wrong
+ship): a fit now always centres on the clear map and the floor limits the zoom only. Selecting a hostile drew her
+rings and Follow on her true position and showed her turn arc, planned thrust and target line; the panel printed
+her true altitude, delta-v, heat, damage and her navigator's orders (both already in v14). A hostile is now drawn,
+ringed, followed and described only from our track: "Unknown hull" or her class, range ± error, one velocity
+arrow from the track, and none of her orders. Eight major findings fixed (labels kept off the selected hull and
+her ring, chapter 6's opening frame on the Lancers, tour step folding on 1366×768 and 1280×720 laptops, the
+Active key's hit area, a campaign cost on the wrong route, the delete note out of sight, shift-click hints on a
+phone, "alongside in never" on the boarding option). Dispositions: scratchpad review/round2-dispositions.md.
+
+### Review round 3, the last (01:55 to 02:20 UTC 2026-09-23; the same six lenses, reports scratchpad/review/<lens>/round3-v15.md)
+
+Every round-2 finding was confirmed fixed or better. Four new blocking findings, all one-line or small, all fixed:
+on a phone the ship chapter 3's first card names had no label while another hull's label sat beside her (the ship
+an open card is about and our target now keep their labels, as the hint's hull does, and a label placed nearer
+another hull than its own gets a leader line); a hostile's panel labelled her sensor reach "Our sensors" (now "Her
+sensors"); the phone hints for chapters 4, 7 and 8 read as a multi-select a phone does not have (now "Give each
+ship the same order, one ship at a time: tap the ship, ..."); the slug card, held up to be read after its moment,
+said "her coilgun still reaches 0 m" (it now says we are outside her coilgun). Majors fixed: a 1280×720 laptop with
+a card open keeps the card's lesson behind Why?, and the tour step folds measuring from the comms banner; a
+selected block sheds lines before it sits on another hull; the scale bar gives way when there is no room; a card
+title keeps a proper noun ("JCS Larkspur: Conamara Station is under fire"); the panel names a contact as the list
+does, with "Class unknown". Minors fixed: a bare contact draws no signature ring; boarding with no run reads "we
+cannot get alongside her"; the cripple lesson says the hull is yours "if the party wins"; "(tap to select)" and no
+X key in the phone hints; denser far dashes on long error bars; a filled head on edge arrows.
+
+### Carried into the next pass (v15)
+
+- Chapter 8 onto Amalthea's real orbit (altitude 111 000 km, not 181 000 km): it changes the chapter's orbital
+  drift, a mechanics pass.
+- A station's damage board lists a drive (damage.js gives every hull one; a mechanics pass decides).
+- The plume and sensors.js plumePower follow commanded throttle, not delivered thrust; change both together.
+- Phone: the first card in chapter 1 covers the tour step (one band on a phone), and the card gating itself.
+- Card load (18 cards in 13 min in a skirmish, 9 in 21 min in chapter 3): a card-design pass.
+- Framed DOM screens start at x 200 against 64 on the canvas screens, with no T+ clock.
+- Part callouts "Spinal beam", "Rail pair", "Beam turrets" beside the mount names "Spinal laser", "Coilgun",
+  "Defence laser": a naming pass across the art source and ships.js.
+- A log line when a contact's own burn gives us the solution; ± on a bare contact's label (the bar carries it).
+- A radiators row on a hostile's panel at track quality (the portrait shows them).
+- Chapter 6's first two seconds frame before the hint band is counted (it settles by 2.5 s); on a phone in
+  chapter 7 a tap cannot reach Anselm inside a 28 px cluster (the pick radius is 24 px).
+- A few campaign route costs sit 18 to 32 px off their own line (the spot weight for the own line).
+- Vector arrows start at the hull centre at art zoom; the map calls a Lancer a missile boat where the panel says
+  interceptor carrier; four-digit ranges ungrouped in sensor log lines (the house format groups from 10 000).
+- Carried from v14: chapter 4 at 1 s steps and 0 s reading delay, the one seeded sweep loss (15 of 16).

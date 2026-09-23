@@ -1599,7 +1599,8 @@
       'ours against their ' + facetLine(r.beams);
     // The line above is at the throttle this hull is holding now, so only the other end of the
     // throttle is worth printing: two identical ladders one under the other teach nothing.
-    const th = throttleFacets(ship, target);
+    // a hull with no drive (a station) has no throttle to cut, so she gets no throttle lines
+    const th = ship.thrust > 0 ? throttleFacets(ship, target) : null;
     if (th) {
       if (ship.throttle > 0.01) body += '\nwith our drive cold: ' + facetLine(th.cold);
       if (ship.throttle < 0.99) body += '\nat full throttle: ' + facetLine(th.full);

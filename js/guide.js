@@ -7,6 +7,10 @@
   const U = OD.U, P = OD.P;
   const AP = OD.Autopilot;
   const fmt = U.fmt;
+  // v15: a touch screen taps, and a phone has no ship list beside the map.
+  const touch = () => { if (typeof window === 'undefined') return false; try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true; } catch (e) { /* no media queries */ } return window.innerWidth < 900; };
+  const tap = () => (touch() ? 'Tap' : 'Click');
+  const narrow = () => typeof window !== 'undefined' && window.innerWidth < 900;
 
   const HORIZON = 4 * 3600;   // s of look-ahead
   const MOVABLE = { intercept: 1, keeprange: 1, matchv: 1, retreat: 1, manual: 1, evade: 1, approach: 1 };
@@ -183,7 +187,7 @@
       case 'intercept':
       case 'evade':
       case 'keeprange': {
-        if (!target) return L('idle', pre + 'No target for this order. Click a contact to pick one.');
+        if (!target) return L('idle', pre + 'No target for this order. ' + tap() + ' a contact to pick one.');
         const holding = order.type !== 'intercept';
         const want = holding ? 'holding ' + fmt.dist(order.range || 200e3) + ' from ' + tname : 'alongside ' + tname;
         if (turning) return L('turn', pre + 'Turning ' + fmt.deg(err).replace('°', '') + '° to point the nose along the burn.', 'Thrust only goes out the tail, so every burn starts with a turn. This hull needs about ' + fmt.time(AP.turnTimeFor(ship, err)) + '.');
@@ -197,7 +201,7 @@
         return L('coast', pre + 'Coasting toward ' + tname + (order.vmax ? ' at the cruise cap' : '') + ', ' + fmt.speed(rel) + ' relative.', tBrake != null ? 'Braking starts in ' + fmt.time(tBrake) + '.' : tArr != null ? 'Arrive in ' + fmt.time(tArr) + '.' : '');
       }
       case 'matchv':
-        if (!target) return L('idle', pre + 'No target to match. Click a contact.');
+        if (!target) return L('idle', pre + 'No target to match. ' + tap() + ' a contact.');
         if (turning) return L('turn', pre + 'Turning to point the nose against the drift.', 'About ' + fmt.time(AP.turnTimeFor(ship, err)) + '.');
         if (burning) return L('brake', pre + 'Killing the relative motion to ' + tname + ', ' + fmt.speed(rel) + ' left.', 'At zero relative speed the range stops changing.');
         return L('hold', pre + 'Velocity matched with ' + tname + '.', 'Range stays ' + fmt.dist(U.dist(ship.pos, target.pos)) + ' until one of you burns.');
@@ -214,7 +218,8 @@
       default: {
         if (burning) return L('burn', pre + 'Burning.');
         const orb = sim.body ? P.orbitalElements(sim.body.mu, ship.pos, ship.vel) : null;
-        const sub = orb && orb.bound ? 'Orbit ' + fmt.dist(orb.periapsis - sim.body.radius) + ' × ' + fmt.dist(orb.apoapsis - sim.body.radius) + '.' + (orb.periapsis < sim.body.radius ? ' The low point is below the surface.' : '') : target ? 'Nose kept toward ' + tname + '.' : '';
+        const lo = orb && orb.bound ? fmt.dist(orb.periapsis - sim.body.radius) : '', hi = orb && orb.bound ? fmt.dist(orb.apoapsis - sim.body.radius) : '';
+        const sub = orb && orb.bound ? 'Altitude ' + (lo === hi ? lo + ', circular' : lo + ' to ' + hi) + '.' + (orb.periapsis < sim.body.radius ? ' The low point is below the surface.' : '') : target ? 'Nose kept toward ' + tname + '.' : '';
         return L('coast', pre + 'Coasting' + (sim.body ? ' around ' + sim.body.name : '') + '. Nothing is spent until you give an order.', sub);
       }
     }
@@ -234,10 +239,10 @@
     }
     if (load > 0.7 && !ship.radiators.deployed && (!hostile || U.dist(hostile.pos, ship.pos) > 600e3)) return 'Sink at ' + Math.round(load * 100) + ' %. Extend the radiators. Nothing hostile is inside 600 km to shoot them off.';
     if (order.type === 'hold') {
-      if (!target && hostile) return 'Pick a target. Click a contact on the map or in the list.';
+      if (!target && hostile) return 'Pick a target. ' + tap() + ' a contact on the map' + (narrow() ? '.' : ' or in the list.');
       if (target && sim.isHostile(target, ship)) return 'Keep range at ' + fmt.dist(cls.doctrine.range || 200e3) + ' to fight at this hull\'s doctrine range. Intercept closes to boarding range instead.';
       if (target && !sim.isHostile(target, ship)) return 'Intercept to rendezvous. The autopilot burns, flips halfway and brakes alongside her.';
-      if (!target && !hostile) return 'No target yet. ' + (typeof window !== 'undefined' && window.innerWidth < 900 ? 'Tap' : 'Click') + ' a ship to make it the target.';
+      if (!target && !hostile) return 'No target yet. ' + tap() + ' a ship to make it the target.';
     }
     if (ship.deltaV() / ship.deltaVFull() < 0.2 && order.type === 'intercept' && !order.vmax) return 'Delta-v is down to ' + Math.round((ship.deltaV() / ship.deltaVFull()) * 100) + ' % of full. A cruise cap makes the transfer slower and much cheaper.';
     return null;

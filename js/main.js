@@ -233,7 +233,7 @@
       this.bridge('chapters', {
         eyebrow: 'Story', title: 'Eight chapters',
         sub: 'Eight missions, March to July 2211. You start in the corvette Larkspur and finish in the cruiser Harkness.',
-        chapters: chapters.map((c, i) => ({ n: c.n, title: c.title, sub: c.location + ' · ' + c.date + (i === 0 ? ' · guided tour' : ''), done: !!done[c.id], locked: !(i === 0 || done[chapters[i - 1].id] || prog.unlockAll), act: () => this.showBriefing(i) })),
+        chapters: chapters.map((c, i) => ({ n: c.n, title: c.title, sub: String(c.location).replace(/(\d) (?=\d{3}\b)/g, '$1\u00a0').replace(/(\d) (km\b)/g, '$1\u00a0$2') + ' · ' + String(c.date).replace(/ /g, '\u00a0') + (i === 0 ? ' · guided tour' : ''), done: !!done[c.id], locked: !(i === 0 || done[chapters[i - 1].id] || prog.unlockAll), act: () => this.showBriefing(i) })),
         keys: [
           { id: 'k:war', label: 'The war so far', kbd: 'W', hot: 'w', act: () => this.showSituation({ back: () => this.storySelect(), backLabel: 'Back to the chapters' }) },
           { id: 'k:back', label: 'Back', kbd: 'Esc', esc: true, act: () => this.showMenu() },
@@ -610,13 +610,24 @@
       const x0 = (ins.l || 0) + 12, x1 = w - (ins.r || 0) - 12, y0 = (ins.t || 0) + 12, y1 = h - (ins.b || 0) - 12;
       const watch = [s];
       const t = s.target ? sim.byId(s.target) : null; if (t && !t.destroyed) watch.push(t);
-      try { for (const o of sim.hostiles(s)) if (!o.destroyed && watch.indexOf(o) < 0 && OD.U.dist(o.pos, s.pos) < 2500e3) watch.push(o); } catch (e) { /* the selected ship alone */ }
+      // with no target yet, every hostile is watched: the hint names them, and a pan onto our hull alone pushed
+      // chapter 6's three Lancers off the top of the map
+      try { for (const o of sim.hostiles(s)) if (!o.destroyed && watch.indexOf(o) < 0 && (!t || OD.U.dist(o.pos, s.pos) < 2500e3)) watch.push(o); } catch (e) { /* the selected ship alone */ }
       // a hull a hint is pointing at ('click JCV Long Meridian') has to be visible now, not in ten seconds
       let marked = null;
       try { const m = OD.Guide && OD.Guide.mark; if (m && m.shipId) { marked = sim.byId(m.shipId); if (marked && !marked.destroyed && watch.indexOf(marked) < 0) watch.push(marked); } } catch (e) { marked = null; }
       const scr = (o) => { const p = this.viewPos(o); return { x: (p.x - this.cam.x) * this.cam.zoom + w / 2, y: h / 2 - (p.y - this.cam.y) * this.cam.zoom }; };
       const pts = watch.map(scr);
       const inside = (p) => p.x > x0 && p.x < x1 && p.y > y0 && p.y < y1;
+      // A fit on one hull alone spans the camera's 10 km floor and zooms all the way in (chapter 6 opened on an
+      // empty map at 5 km a side when its first hint appeared): one hull is panned into the clear part at the
+      // zoom the player has, and only a group is fitted.
+      const refit = () => {
+        this.cam.inset = this.hudInset();
+        if (watch.length > 1 || !(this.cam.zoom > 0)) { this.cam.fit(watch.map((o) => this.viewPos(o)), 0.5); return; }
+        const ni = this.cam.inset, fx = ((ni.l || 0) + (w - (ni.r || 0))) / 2, fy = ((ni.t || 0) + (h - (ni.b || 0))) / 2;
+        this.cam.x = s.pos.x - (fx - w / 2) / this.cam.zoom; this.cam.y = s.pos.y + (fy - h / 2) / this.cam.zoom; this.cam.follow = null;
+      };
       let on = pts.every(inside);
       if (marked && !on && sim.time - (this._markFitAt || -1e9) > 30 && now - (this._pannedAt || -1e9) > 5000) {
         const mp = scr(marked);
@@ -625,7 +636,7 @@
       // a band or panel that has just grown over the map (a decision opening on a phone covers half of it): refit now
       const ft = ins.t || 0, fb = ins.b || 0;
       const grew = this._lastFree != null && (Math.abs(ft - this._lastFree[0]) > 60 || Math.abs(fb - this._lastFree[1]) > 60); this._lastFree = [ft, fb];
-      if (grew && !on && now - (this._pannedAt || -1e9) > 5000) { this._offMapSince = 0; this._autoFitAt = sim.time; this.cam.fit(watch.map((o) => this.viewPos(o)), 0.5); return; }
+      if (grew && !on && now - (this._pannedAt || -1e9) > 5000) { this._offMapSince = 0; this._autoFitAt = sim.time; refit(); return; }
       if (on && pts.length > 1) {
         // all in frame but huddled: the group spans under a quarter of the free rectangle both ways
         const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
@@ -645,7 +656,7 @@
       if (!this._offMapSince) { this._offMapSince = sim.time || 1e-6; return; }
       if (sim.time - this._offMapSince > 10 && quiet) {
         this._offMapSince = 0; this._autoFitAt = sim.time;
-        this.cam.inset = this.hudInset(); this.cam.fit(watch.map((o) => this.viewPos(o)), 0.5); // room to move before the next refit
+        refit(); // room to move before the next refit
       }
     },
     // v12: once a zoom-in draws a hull at 10 px the screen spans a few tens of kilometres, so the player is looking
@@ -683,10 +694,21 @@
       if (top) ins.t = top.bottom * k;
       if (bottom && bottom.height > 0) ins.b = Math.max(0, window.innerHeight - bottom.top) * k;
       // an open decision or hint band on the laptop layout covers the map above the log: keep the framing clear of it
-      const band = r('decision') || r('hint');
-      if (band && band.height > 0) { if (band.top > window.innerHeight * 0.4) ins.b = Math.max(ins.b, (window.innerHeight - band.top) * k); else ins.t = Math.max(ins.t, band.bottom * k); }
+      // (a tour step can stand above an open card: both count)
+      // The bands stack: the lowest one is a bottom band when its middle is in the lower half (a tall card on a
+      // 1366×768 laptop starts above 0.4 of the height and still stands on the log), and a band touching the stack
+      // above it belongs to the same stack. Anything else hangs from the top.
+      const bands = [r('decision'), r('hint')].filter((b) => b && b.height > 0).sort((a, b) => b.bottom - a.bottom);
+      let stackTop = null;
+      for (const band of bands) {
+        const low = stackTop == null ? (band.top + band.bottom) / 2 > window.innerHeight * 0.5 : band.bottom >= stackTop - 16;
+        if (low) { stackTop = stackTop == null ? band.top : Math.min(stackTop, band.top); ins.b = Math.max(ins.b, (window.innerHeight - band.top) * k); }
+        else ins.t = Math.max(ins.t, band.bottom * k);
+      }
       const toastEl = r('toast');
       if (toastEl && toastEl.height > 0 && toastEl.bottom < window.innerHeight * 0.4) ins.t = Math.max(ins.t, toastEl.bottom * k);
+      // the phone banner sits at the foot of the map row, over the map: a bottom inset there
+      else if (toastEl && toastEl.height > 0 && toastEl.top > window.innerHeight * 0.4 && window.innerWidth <= 900) ins.b = Math.max(ins.b, (window.innerHeight - toastEl.top) * k);
       // a panel the layout has hidden (display: none) measures 0 × 0 and covers nothing
       if (fleet && fleet.width > 0 && fleet.height > 0 && fleet.width < window.innerWidth * 0.45) ins.l = fleet.right * k;
       if (ship && ship.width > 0 && ship.height > 0 && ship.width < window.innerWidth * 0.45) ins.r = Math.max(0, window.innerWidth - ship.left) * k;

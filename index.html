@@ -96,7 +96,9 @@
     background-position: left top, left top, right bottom, right bottom, 0 0; background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat; }
 
   /* ---- HUD ---- */
-  #hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: 244px 1fr 328px; grid-template-areas: "top top top" "fleet . ship" "bottom bottom ship"; }
+  /* The map key has a row of its own under the ship list, so a long list scrolls (or the key folds to its header)
+     instead of printing over the key. */
+  #hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; grid-template-columns: 244px 1fr 328px; grid-template-areas: "top top top" "fleet . ship" "legend . ship" "bottom bottom ship"; }
   #hud > * { pointer-events: auto; }
   #topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 14px; padding-top: calc(5px + env(safe-area-inset-top, 0px)); background: linear-gradient(180deg, rgba(4,7,12,0.92), rgba(4,7,12,0.55)); border-bottom: 1px solid var(--line); }
   .tb-left { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
@@ -114,13 +116,15 @@
   .seg button.active { background-color: transparent; color: var(--accent); border-bottom-color: var(--accent); }
   #fleet { grid-area: fleet; align-self: start; margin: 12px; max-height: calc(100% - 24px); overflow: auto; }
   #fleet h3, #shipPanel h3 { padding: 8px 12px 4px; }
-  .fleet-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 12px 7px 14px; border-top: 1px solid var(--line); cursor: pointer; position: relative; }
+  /* A name prints in full: when the name and the status do not fit on one line, the status wraps under the name
+     (right-aligned, so the status column stays at the right edge) instead of cutting the name to "ISV Cori…". */
+  .fleet-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 7px 12px 7px 14px; border-top: 1px solid var(--line); cursor: pointer; position: relative; }
   .fleet-row:hover { background: rgba(120,150,180,0.08); }
   .fleet-row.selected { background: rgba(79,209,197,0.1); box-shadow: inset 3px 0 0 var(--accent); }
   .fleet-row.targeted { box-shadow: inset 3px 0 0 var(--warn); }
-  .fleet-row .name { font-family: var(--display); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; letter-spacing: 0.03em; }
-  .fleet-row .order { font-family: var(--mono); font-size: 10.5px; color: var(--dim); text-align: right; text-transform: uppercase; letter-spacing: 0.06em; align-self: center; }
-  .fleet-row .bars { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .fleet-row .name { flex: 0 1 auto; max-width: 100%; font-family: var(--display); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; letter-spacing: 0.03em; }
+  .fleet-row .order { flex: 0 0 auto; max-width: 100%; margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dim); text-align: right; text-transform: uppercase; letter-spacing: 0.06em; align-self: center; }
+  .fleet-row .bars { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .bar { height: 3px; background: rgba(255,255,255,0.1); overflow: hidden; position: relative; }
   .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); }
   .bar.heat > i { background: var(--good); } .bar.heat.warn > i { background: var(--warn); } .bar.heat.crit > i { background: var(--crit); }
@@ -176,17 +180,20 @@
   .next:empty { display: none; }
   .next::before { content: '▸ '; color: var(--accent); }
   /* map key: a strip, not a card */
-  #legend { grid-area: fleet; align-self: end; margin: 12px; padding: 6px 10px 7px; font-size: 11px; color: var(--ink-2); display: grid; grid-template-columns: 1fr; gap: 2px 12px; max-width: 220px; box-sizing: border-box; background-color: var(--glass); border-top: 1px solid var(--line); }
+  #legend { grid-area: legend; align-self: end; margin: 0 12px 12px; padding: 6px 10px 7px; font-size: 11px; color: var(--ink-2); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 12px; max-width: 220px; box-sizing: border-box; background-color: var(--glass); border-top: 1px solid var(--line); }
   .lg-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-family: var(--display); font-weight: 600; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
-  .lg-head button { padding: 0 6px; font-size: 14px; line-height: 1.2; }
-  .lg-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  .sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--accent); flex: none; }
-  .sw.drift { border-top: 1px dashed rgba(180,192,207,0.7); }
-  .sw.burn { border-top: 2px solid var(--accent); }
-  .sw.brake { border-top: 2px solid var(--brake); }
-  .sw.ring { width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 50%; margin: 0 6px; }
-  .sw.sel { width: 9px; height: 9px; border: 1.5px solid #fff; border-radius: 50%; margin: 0 6px; }
-  .sw.tgt { width: 9px; height: 9px; border: 2px solid #e8eef5; margin: 0 6px; }
+  .lg-head button { padding: 1px 7px; font-size: 10px; line-height: 1.3; letter-spacing: 0.16em; margin-right: -4px; }
+  #legend.folded .lg-row { display: none; }
+  #legend.folded { padding-bottom: 6px; }
+  .lg-row { display: flex; align-items: center; gap: 8px; line-height: 1.3; }  /* a long row wraps inside the key's 220 px, so the Hide key stays in the box */
+  /* the map key's swatches (scoped: the configurator has a .sw of its own) */
+  #legend .sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--accent); flex: none; }
+  #legend .sw.drift { border-top: 1px dashed rgba(180,192,207,0.7); }
+  #legend .sw.burn { border-top: 2px solid var(--accent); }
+  #legend .sw.brake { border-top: 2px solid var(--brake); }
+  #legend .sw.ring { width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 50%; margin: 0 6px; }
+  #legend .sw.sel { width: 9px; height: 9px; border: 1.5px solid #fff; border-radius: 50%; margin: 0 6px; }
+  #legend .sw.tgt { width: 9px; height: 9px; border: 2px solid #e8eef5; margin: 0 6px; }
   /* navigator */
   .nav { border-left: 3px solid var(--accent); background: linear-gradient(90deg, rgba(79,209,197,0.09), rgba(79,209,197,0)); }
   .nav[data-phase="burn"], .nav[data-phase="trim"] { border-left-color: var(--blue); background: linear-gradient(90deg, rgba(127,184,255,0.1), rgba(127,184,255,0)); }
@@ -225,9 +232,11 @@
 
   #bottom { grid-area: bottom; display: grid; grid-template-columns: 1fr 320px; gap: 12px; margin: 0 12px 12px; align-items: end; }
   #log { padding: 6px 12px; max-height: 150px; overflow: auto; font-size: 12.5px; }
-  #log .line { display: grid; grid-template-columns: 60px 96px 1fr; gap: 8px; padding: 2px 0; }
+  #log .line { display: grid; grid-template-columns: 60px 118px 1fr; gap: 8px; padding: 2px 0; }
   #log .t { font-family: var(--mono); color: var(--dim); font-size: 11.5px; }
-  #log .who { font-family: var(--display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11.5px; color: var(--ink-2); }
+  #log .who { font-family: var(--display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  /* a line scrolled half out of the top of the log is hidden until it is whole again (ui.js logFit) */
+  #log .line.cut { visibility: hidden; }
   #log .line.comms .who { color: var(--accent); } #log .line.warn .msg { color: var(--warn); } #log .line.alert .msg { color: var(--crit); } #log .line.good .msg { color: var(--good); }
   #objectives { padding: 8px 12px; }
   #objectives h3 { padding: 0 0 4px; }
@@ -243,12 +252,23 @@
   #hint p { margin: 0; font-size: 14px; line-height: 1.45; }
   #hint .eyebrow { font-family: var(--display); color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-size: 11px; margin-bottom: 3px; font-weight: 600; }
   #hint .hint-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  /* a tour step over an open card on a short laptop folds to its step line and its keys until the card closes
+     (ui.js bandLayout); the fold line says why the words are gone */
+  #hint .hint-fold { display: none; }
+  #hint.folded { padding-top: 5px; padding-bottom: 5px; }
+  #hint.folded .hint-body { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  #hint.folded .eyebrow { margin: 0; flex: none; }
+  #hint.folded #hintText { display: none; }
+  #hint.folded .hint-fold { display: block; min-width: 0; font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hint.folded .hint-actions { flex-direction: row; align-items: center; }
   .glow { animation: glow 1.2s ease-in-out infinite alternate; }
   @keyframes glow { from { box-shadow: 0 0 0 0 rgba(79,209,197,0.0); } to { box-shadow: 0 0 0 3px rgba(79,209,197,0.6); } }
   /* comms line: docked at the top of the map */
-  #toast { position: absolute; top: 54px; left: 268px; right: 352px; background: var(--glass-2); border-bottom: 1px solid var(--line); padding: 8px 16px; font-family: var(--display); font-size: 15px; letter-spacing: 0.06em; text-align: center; color: var(--ink-2); }
-  #toast.comms { font-family: var(--sans); font-size: 14px; letter-spacing: 0; text-align: left; border-left: 3px solid var(--accent); color: var(--ink); }
+  /* one banner style for every line: a notice has the steel bar, a line someone says has the teal bar and the speaker */
+  #toast { position: absolute; top: 54px; left: 268px; right: 352px; background: var(--glass-2); border-bottom: 1px solid var(--line); border-left: 3px solid var(--line-2); padding: 8px 16px; font-family: var(--sans); font-size: 14px; letter-spacing: 0; text-align: left; color: var(--ink); }
+  #toast.comms { border-left-color: var(--accent); }
   #toast.comms b { font-family: var(--display); color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; margin-right: 10px; }
+  #toast .tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-left: 10px; padding-left: 8px; border-left: 1px solid var(--line-2); white-space: nowrap; }
   #tooltip { position: absolute; z-index: 30; max-width: 340px; background: var(--glass-2); border: 1px solid var(--line-2); border-left: 2px solid var(--accent); padding: 8px 10px; pointer-events: none; font-size: 12.5px; }
   #tooltip .tt-title { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 3px; color: var(--accent); }
   #tooltip .tt-body { color: var(--ink-2); }
@@ -261,6 +281,34 @@
   .screen.beside { justify-content: flex-start; align-items: center; background: linear-gradient(90deg, rgba(4,7,12,0.9) 0, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.2) 100%); }
   .screen.beside .card { width: min(520px, 100%); margin: auto auto auto 6vw; }
   .screen.beside .card.wide { width: min(640px, 100%); }
+  /* The DOM screens (physics, help, campaign, configurator) wear the canvas console's frame, as bridge.js frame() and
+     header() draw it: a hairline frame 20 px in (8 px on a phone) with teal corner brackets and a tick rail along the
+     bottom, a header strip that names the screen, and the content scrolling inside the frame. The hull view keeps its
+     own layout and is never framed. */
+  .screen.framed { display: block; overflow: hidden; padding: 0; scrollbar-gutter: auto; }
+  .scr-frame { position: absolute; inset: 20px; border: 1px solid var(--line); pointer-events: none; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.028) 0 1px, transparent 1px 3px); }
+  .scr-frame::before { content: ''; position: absolute; inset: -2px; pointer-events: none;
+    background-image: var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick), var(--tick);
+    background-size: 22px 1px, 1px 22px, 22px 1px, 1px 22px, 22px 1px, 1px 22px, 22px 1px, 1px 22px;
+    background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom; background-repeat: no-repeat; }
+  .scr-rail { position: absolute; left: 39px; right: 20px; bottom: 0; height: 8px; pointer-events: none;
+    background-image: repeating-linear-gradient(90deg, var(--line-2) 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, var(--line-2) 0 1px, transparent 1px 200px);
+    background-size: 100% 4px, 100% 8px; background-position: 0 100%, 160px 100%; background-repeat: no-repeat; }
+  .scr-head { position: absolute; left: 21px; right: 21px; top: 26px; height: 28px; display: flex; align-items: center; gap: 12px; padding: 0 11px 0 13px; box-sizing: border-box; }
+  .scr-head::after { content: ''; position: absolute; left: 9px; right: 9px; bottom: -7px; height: 1px; background: var(--line-2); }
+  /* 2 px down from the strip's middle: that is where bridge.js header() sets its square and caption */
+  .scr-mode { position: relative; top: 2px; display: flex; align-items: center; gap: 8px; min-width: 0; font-family: var(--display); font-weight: 600; font-size: 11.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+  .scr-mode::before { content: ''; width: 6px; height: 6px; background: var(--accent); flex: none; }
+  .scr-mode span { overflow: hidden; text-overflow: ellipsis; }
+  .scr-keys { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+  /* the keys as bridge.js header() draws them: 24 px tall at the strip's middle, 12.5 px capitals centred on it
+     (Rajdhani's capitals sit high in their line box, so the text box starts 3 px down) */
+  .scr-keys button { box-sizing: border-box; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 3px 9px 0; font-size: 12.5px; line-height: 1; }
+  /* the body ends 2 px above the tick rail, and its last 16 px fade, so no line of text runs through the rail */
+  .scr-body { position: absolute; left: 21px; right: 21px; top: 70px; bottom: 30px; overflow-x: hidden; overflow-y: auto; padding: 24px 35px 40px; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(127,184,255,0.45) transparent;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
+  .screen.framed .card { margin: 0 auto; }
+  .screen.framed .title { text-transform: uppercase; font-size: 44px; line-height: 0.94; }
   /* a screen over the bridge dims the console so the map is all that shows through */
   body.screen-open #hud { opacity: 0.06; }
   body.screen-open #view { opacity: 0.12; }
@@ -346,38 +394,87 @@
     /* One column that can never grow past the viewport: the top bar wraps instead of widening the grid. */
     #hud { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(180px, 1fr) auto auto; grid-template-areas: "top" "hint" "." "ship" "bottom"; }
     #btnFit, #btnHull, #modeLabel { display: none; }
-    #topbar { flex-wrap: wrap; gap: 6px 10px; padding-left: 8px; padding-right: 8px; }
-    .tb-left, .tb-mid, .tb-right { min-width: 0; flex-wrap: wrap; }
+    /* Every key a thumb uses during play is at least 40 px tall. The bar pays for the taller keys row with less
+       padding, so it stays about as tall as before (62 px); the warp pill is dropped while Skip ahead shows, so the
+       clock, the next event and Skip ahead share one row instead of taking two. */
+    #topbar { flex-wrap: wrap; gap: 0 10px; padding: 2px 8px 0; padding-top: calc(2px + env(safe-area-inset-top, 0px)); }
+    .tb-left, .tb-mid { min-width: 0; flex-wrap: wrap; }
+    .tb-mid { gap: 0 10px; }
+    .tb-mid:has(#btnSkip:not([hidden])) #warpLabel { display: none; }
+    #btnSkip { min-height: 40px; }
+    /* the keys row is one line on any phone: the warp keys on the left, Physics, Help and Menu on the right */
+    .tb-right { min-width: 0; flex: 1 1 100%; flex-wrap: nowrap; gap: 0; }
+    .tb-right .seg { margin-right: auto; }
+    .tb-right > button { padding: 0 7px; min-height: 40px; letter-spacing: 0.08em; flex: none; }
     #clock { font-size: 18px; }
-    .seg button { min-width: 34px; padding: 5px 6px; }
+    .seg button { min-width: 30px; min-height: 40px; padding: 0 5px; }
     #fleet { display: none; }
     #shipPanel { margin: 0 8px 6px; max-height: 36vh; background-color: var(--glass-3); }
     .portrait { height: 44px; }
     #bottom { grid-template-columns: minmax(0, 1fr); margin: 0 8px 8px; }
-    #log { max-height: 96px; font-size: 12px; }
-    #log .line { grid-template-columns: 58px 60px minmax(0, 1fr); gap: 6px; }
-    #log .line .t { font-size: 11px; }
+    /* the log takes its full height from the first line, so the panel and the map above it never move as it fills */
+    #log { height: 110px; max-height: 110px; box-sizing: border-box; font-size: 12px; }
+    /* the time and the speaker on a short line of their own, the message under them at the log's full width, so a
+       name like DAMAGE CONTROL prints in full (ui.js logFit sizes the box to whole lines) */
+    #log .line { grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; align-items: baseline; padding: 3px 0 2px; }
+    #log .line .t { font-size: 11px; line-height: 1.3; }
+    #log .line > .msg { grid-column: 1 / -1; }
     .nav-line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .nav-sub { display: none; }
-    #log .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+    #log .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; line-height: 1.3; }
     #log .line > :last-child { overflow-wrap: anywhere; }
     #objectives { display: none; }
     .tb-left .mission { display: none; }
     /* the advisory band sits in the flow under the top bar, so it pushes the map down instead of covering it */
-    #hint { position: static; grid-area: hint; margin: 0 8px 4px; grid-template-columns: 1fr; }
-    #legend { display: none; }
-    #toast { left: 0; right: 0; top: auto; bottom: calc(36vh + 110px); }
+    /* Got it and Skip tour sit on the step line, right of "Step 1 of 5", so the 40 px keys add no row of their own */
+    #hint { position: static; grid-area: hint; margin: 0 8px 4px; padding: 0 10px 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "eye act" "txt txt"; gap: 0 8px; }
+    #hint .hint-body { display: contents; }
+    #hint .eyebrow { grid-area: eye; align-self: center; margin: 0; }
+    #hint p { grid-area: txt; }
+    #hint .hint-actions { grid-area: act; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0 4px; }
+    #hint .hint-actions button { min-height: 40px; padding-top: 0; padding-bottom: 0; }
+    /* The map key: folded to its "Map key · Show" line at the top left of the map, opening over the map. The key
+       hides again with Hide. Folded, the Show key's hit area runs 10 px below the line (40 px in all). */
+    #legend { position: relative; grid-row: 3; grid-column: 1; align-self: start; justify-self: start; margin: 4px 8px 0; z-index: 4; max-width: min(240px, calc(100% - 16px)); max-height: calc(100% - 8px); overflow-y: auto; padding: 0 10px 8px; background-color: var(--glass-3); border: 1px solid var(--line); }
+    #legend.folded { padding: 0 0 0 10px; overflow: visible; background-color: var(--glass-2); }
+    #legend .lg-head { gap: 12px; }
+    #legend .lg-head button { position: relative; min-height: 30px; padding: 0 10px; margin-right: 0; }
+    #legend .lg-head button::after { content: ''; position: absolute; left: 0; right: 0; top: 0; bottom: -10px; }
+    /* the banner sits at the foot of the map row, so it ends where the ship panel starts */
+    /* opaque on a phone: the map's labels read through the glass under a line of text this narrow */
+    #toast { position: relative; grid-row: 3; grid-column: 1; align-self: end; top: auto; left: auto; right: auto; bottom: auto; margin: 0 8px 4px; z-index: 5; background: rgb(5, 9, 15); }
     #hint:not([hidden]) ~ #toast { display: none; }
     .screen { padding: 20px 16px; }
+    .scr-frame { inset: 8px; }
+    .scr-frame::before { background-size: 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px; }
+    .scr-head { left: 9px; right: 9px; top: 14px; height: 44px; padding: 0 2px 0 13px; gap: 8px; }
+    .scr-mode { letter-spacing: 0.16em; }
+    .scr-keys { gap: 4px; }
+    .scr-keys button { height: 44px; min-width: 40px; padding: 3px 8px 0; }
+    .scr-body { left: 9px; right: 9px; top: 70px; bottom: 18px; padding: 10px 11px 32px; }
+    .screen.framed .title { font-size: 34px; }
+    /* the hull view's keys wrap instead of running off a phone */
+    .hullview .views { flex-wrap: wrap; row-gap: 4px; }
     .screen.beside { justify-content: center; }
     .screen.beside .card { margin-left: 0; }
     .menu-actions.cols { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr; }
     .hullview { grid-template-columns: 1fr; }
-    .hullview .pic { height: 260px; }
+    .hullview .pic { height: 320px; }  /* room for a station between its two label lanes */
     .vitals .v { font-size: 17px; }
-    #hint .hint-actions { flex-direction: row; }
+    /* Follow and Essentials stay small over the 44 px picture (taller keys would cover the hull), but their hit
+       area runs 10 px above and below them: 42 px */
+    .portrait-wrap .head-tools button { position: relative; }
+    .portrait-wrap .head-tools button::after { content: ''; position: absolute; left: 0; right: 0; top: -10px; bottom: -10px; }
+    /* the signature row's Active key the same way: drawn 22 px tall, its hit area runs 9 px above and below it */
+    .sigrow #pActive { position: relative; }
+    .sigrow #pActive::after { content: ''; position: absolute; left: 0; right: 0; top: -9px; bottom: -9px; }
   }
+  @media (hover: none) and (max-width: 900px) { .hullview .views kbd { display: none; } }
+  /* a touch screen has no keyboard: no key letters on the keys (Esc, the return arrow, W) */
+  @media (pointer: coarse) { button kbd { display: none; } .orders button > span { padding-right: 0; } }
+  /* a 360 px phone with large text: the keys row tightens so Menu stays on it */
+  @media (max-width: 374px) { .tb-right > button { padding: 0 5px; letter-spacing: 0.04em; } .seg button { min-width: 28px; padding: 0 3px; } }
   @media (prefers-reduced-motion: reduce) { .glow { animation: none; box-shadow: 0 0 0 3px rgba(79,209,197,0.6); } .gauge .fill, .gauge .cost { transition: none; } .fade-in { animation: none; } }
   /* bridge console mirror: real keys for keyboards and screen readers, off the glass (the console itself is drawn on #view) */
   #bridgeA11y { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
@@ -416,7 +513,7 @@
       </div>
     </header>
     <aside id="fleet" class="glass" aria-label="Ships and contacts"><h3>Ships</h3><div id="fleetList"></div></aside>
-    <div id="legend" aria-label="Map key"><div class="lg-head"><span>Map key</span><button id="legendClose" class="sm ghost" aria-label="Hide the map key">×</button></div>
+    <div id="legend" aria-label="Map key"><div class="lg-head"><span>Map key</span><button id="legendFold" class="sm ghost" aria-expanded="true" aria-controls="legend">Hide</button></div>
       <div class="lg-row"><i class="sw drift"></i>drift if nothing burns</div>
       <div class="lg-row"><i class="sw burn"></i>burning</div>
       <div class="lg-row"><i class="sw brake"></i>braking tail-first</div>
@@ -429,7 +526,7 @@
       <div id="log" class="glass" aria-live="polite" aria-label="Log"></div>
       <div id="objectives" class="glass"><h3>Objectives</h3><div id="objList"></div></div>
     </section>
-    <div id="hint" hidden role="status"><div class="hint-body"><div class="eyebrow" id="hintStep">Hint</div><p id="hintText"></p></div><div class="hint-actions"><button id="hintOk" class="sm primary">Got it<kbd>⏎</kbd></button><button id="hintSkip" class="sm ghost" hidden>Skip tour</button></div></div>
+    <div id="hint" hidden role="status"><div class="hint-body"><div class="eyebrow" id="hintStep">Hint</div><span class="hint-fold">Folded while the card is open.</span><p id="hintText"></p></div><div class="hint-actions"><button id="hintOk" class="sm primary">Got it<kbd>⏎</kbd></button><button id="hintSkip" class="sm ghost" hidden>Skip tour</button></div></div>
     <div id="toast" hidden role="status"></div>
   </div>
   <div id="tooltip" hidden role="tooltip"></div>

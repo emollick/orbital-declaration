@@ -306,9 +306,31 @@ const km = (m) => (m == null ? '—' : Math.round(m / 1000) + ' km');
   check('the order drops to hold within 5 s', dead.droppedAt != null && dead.droppedAt <= 5,
     dead.droppedAt == null ? 'never dropped (order ' + dead.order + ')' : dead.droppedAt + ' s');
   check('the ship lets go of her as a target', dead.target == null, String(dead.target));
-  check('one Autopilot line says why', dead.lines.length === 1 && /ISV Tenacity is out of the fight\. Holding\./.test(dead.lines[0]),
+  check('one Autopilot line says why', dead.lines.length === 1 && /ISV Tenacity is out of the fight\. JCS Test switches to Hold\./.test(dead.lines[0]),
     dead.lines.join(' | '));
   check('no errors when the target dies', dead.errors.length === 0, dead.errors.join(' | '));
+  // v15: three of our hulls on one target used to print the same line three times ('ISV Concordance is
+  // out of the fight. Holding.' four times after chapter 8). One line names them all.
+  const many = await page.evaluate(() => {
+    const mk = (id, name, y) => ({ id, name, cls: 'corvette', faction: 'JC', player: true, ai: false,
+      pos: { x: 0, y }, vel: { x: 0, y: 0 }, heading: 0, heat: 0, order: { type: 'hold' }, weaponsFree: false });
+    OD.harness.start({
+      name: 'Dead target, three hulls', body: null, sunAngle: 0.4, playerFaction: 'JC',
+      ships: [mk('a', 'JCS Alpha', 0), mk('b', 'JCS Bravo', 5e3), mk('c', 'JCS Charlie', -5e3),
+        { id: 'ten', name: 'ISV Tenacity', cls: 'corvette', faction: 'ISA', player: false, ai: false,
+          pos: { x: 400e3, y: 0 }, vel: { x: 0, y: 0 }, heading: Math.PI, heat: 0, order: { type: 'hold' }, weaponsFree: false }],
+      objectives: [{ id: 'x', text: 'hold', type: 'survive', seconds: 1e6 }],
+    });
+    const sim = OD.Game.sim;
+    for (const id of ['a', 'b', 'c']) OD.harness.order(id, { type: 'approach', target: 'ten', speed: 800 });
+    sim.step(60);
+    sim.byId('ten').disabled = true; sim.byId('ten').hull = 0.34;
+    for (let i = 0; i < 20; i++) sim.step(1);
+    return { lines: sim.log.filter((l) => l.speaker === 'Autopilot').map((l) => l.text), orders: ['a', 'b', 'c'].map((id) => sim.byId(id).order.type) };
+  });
+  check('three hulls on one dead target: one line names all three, and all three hold',
+    many.lines.length === 1 && /ISV Tenacity is out of the fight\. JCS \w+, JCS \w+ and JCS \w+ switch to Hold\./.test(many.lines[0]) && many.orders.every((o) => o === 'hold'),
+    many.lines.join(' | ') + ' · ' + many.orders.join(','));
 
   // ---------------------------------------------------------------- 7. an even build is even
   // Three a side, the same hulls, the same board and the same orders on both sides, with the

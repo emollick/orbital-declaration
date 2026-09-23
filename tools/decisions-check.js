@@ -3694,7 +3694,7 @@ function note(text) { console.log('    ' + text); }
         const i = s1 ? s1.labels.findIndex((l) => /^Board her$/.test(l)) : -1;
         out.decks = { raised: !!d, card: s1, odds: B ? B.odds : null,
           theirs: foe.crew ? Math.round(foe.crew.fit) : null, ours: me.crew ? Math.round(me.crew.fit) : null,
-          says: i >= 0 ? /her \d+ fit crew against (our|.+’s) \d+ throws the party back/.test(s1.details[i] || '') : false,
+          says: i >= 0 ? /her \d+ fit crew against (our|.+’s) \d+ throw the party back/.test(s1.details[i] || '') : false,
           unlit: i >= 0 ? s1.rec !== 'Board her' : false };
       }
     } catch (e) { out.err.push(String(e.stack || e)); }

@@ -509,6 +509,12 @@
   // weapons tight — is aimed at a cripple on purpose, and so is the hull the bridge said to finish.
   // Neither is anything aimed at one of ours: a disabled friendly is a rescue, not a wreck.
   const deadSaid = new WeakMap();
+  const deadNews = new WeakMap();  // sim → { target id: the log line that named our hulls holding }
+  function holdWords(t, names) {
+    const who = names.length === 1 ? names[0]
+      : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+    return t.name + ' is out of the fight. ' + who + (names.length === 1 ? ' switches to Hold.' : ' switch to Hold.');
+  }
   const NEEDS_TARGET = ['intercept', 'approach', 'keeprange', 'matchv', 'evade'];
   function outOfFight(s) {
     if (!s) return false;
@@ -534,7 +540,19 @@
     if (!said) deadSaid.set(ship, (said = {}));
     if (!said[t.id] && sim.addLog && ship.faction === sim.playerFaction) {
       said[t.id] = true;
-      sim.addLog(t.name + ' is out of the fight. Holding.', 'Autopilot', 'info');
+      // Several of our hulls on one target drop the order in the same step: one line names them all,
+      // where it used to print 'ISV Concordance is out of the fight. Holding.' once for each of them.
+      let news = deadNews.get(sim);
+      if (!news) deadNews.set(sim, (news = {}));
+      const n = news[t.id];
+      const last = sim.log && sim.log[sim.log.length - 1];
+      if (n && n.entry === last && n.entry.t === sim.time) {
+        n.names.push(ship.name);
+        n.entry.text = holdWords(t, n.names);
+      } else if (!n || sim.time - n.t > 60) {
+        sim.addLog(holdWords(t, [ship.name]), 'Autopilot', 'info');
+        news[t.id] = { entry: sim.log ? sim.log[sim.log.length - 1] : null, names: [ship.name], t: sim.time };
+      }
     }
     return true;
   }

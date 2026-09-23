@@ -13,10 +13,10 @@
     warn: '#ffb454', crit: '#ff5d5d', good: '#7ad97a', select: '#ffffff', plume: '#9fd8ff',
     accent: '#4fd1c5', blue: '#7fb8ff', brake: '#8fa6bf', steel: '#8fa6bf', unknown: '#9db4cc', target: '#e8eef5',
   };
-  // One treatment per ring family, so no two kinds of ring read alike: an uncertainty is a soft disc and is never
-  // stroked, every reach (point defence, interceptor, active sensor) is dashed, the signature ring is dotted, a
-  // standing order's ring is long-dashed and the selection ring is solid and thin. Burn-through ranges are ticks
-  // on the bearing line (see drawLadder) and draw no ring at all.
+  // One treatment per ring family, so no two kinds of ring read alike: an uncertainty is an error bar along the
+  // bearing (or a flat hatched disc) and is never a stroked ring, every reach (point defence, interceptor, active
+  // sensor) is dashed, the signature ring is dotted, a standing order's ring is long-dashed and the selection ring
+  // is solid and thin. Burn-through ranges are ticks on the bearing line (see drawLadder) and draw no ring at all.
   const RING = {
     reach: { dash: [6, 5], width: 1.2 },
     signature: { dash: [1, 5], width: 1.4, cap: 'round' },
@@ -43,13 +43,16 @@
       const w = Math.max(maxx - minx, 1e4), h = Math.max(maxy - miny, 1e4);
       // Fit into the part of the canvas the HUD panels leave clear (inset in canvas pixels), not the whole canvas.
       const ins = this.inset || { l: 0, r: 0, t: 0, b: 0 };
-      // a phone with a band open leaves about a third of the height free: that is still the honest place to fit
-      const cw = Math.max(this.w * 0.25, this.w - ins.l - ins.r), ch = Math.max(this.h * 0.25, this.h - ins.t - ins.b);
-      const l = cw < this.w - ins.l - ins.r + 1 ? ins.l : (this.w - cw) / 2, t = ch < this.h - ins.t - ins.b + 1 ? ins.t : (this.h - ch) / 2;
+      const il = ins.l || 0, ir = ins.r || 0, it = ins.t || 0, ib = ins.b || 0;
+      // A phone with a card open can leave a strip under a quarter of the height. The zoom is never fitted into
+      // less than a quarter of the canvas each way, but the fleet is always centred on the clear strip itself:
+      // centring on the canvas put our ship under the panel or the card.
+      const cw = Math.max(this.w * 0.25, this.w - il - ir), ch = Math.max(this.h * 0.25, this.h - it - ib);
       this.zoom = U.clamp(Math.min((cw * margin) / w, (ch * margin) / h), 2e-8, 2.5);
       const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
-      this.x = cx - (l + cw / 2 - this.w / 2) / this.zoom;
-      this.y = cy + (t + ch / 2 - this.h / 2) / this.zoom;
+      const fx = il + (this.w - il - ir) / 2, fy = it + (this.h - it - ib) / 2;
+      this.x = cx - (fx - this.w / 2) / this.zoom;
+      this.y = cy + (fy - this.h / 2) / this.zoom;
       this.follow = null;
     }
   }
@@ -221,10 +224,8 @@
     gr.addColorStop(0, 'rgba(255,246,225,0.95)'); gr.addColorStop(0.04, 'rgba(255,238,205,0.7)'); gr.addColorStop(0.14, 'rgba(255,214,160,0.28)');
     gr.addColorStop(0.4, 'rgba(255,190,130,0.09)'); gr.addColorStop(1, 'rgba(255,170,110,0)');
     g.fillStyle = gr; g.fillRect(0, 0, R * 2, R * 2);
-    // a faint horizontal streak, as a lens would give
-    const st = g.createLinearGradient(0, R, R * 2, R);
-    st.addColorStop(0, 'rgba(255,220,180,0)'); st.addColorStop(0.5, 'rgba(255,230,200,0.25)'); st.addColorStop(1, 'rgba(255,220,180,0)');
-    g.fillStyle = st; g.fillRect(0, R - R * 0.012, R * 2, R * 0.024);
+    // No lens streak: a horizontal bar from a glare parked past the screen edge showed only as a grey smear
+    // across the map, the menu and the briefings.
     return c;
   }
   // Plume sprite: nozzle at the left edge, exhaust flowing to +x. Three layers composed additively.
@@ -357,12 +358,15 @@
     return c;
   }
 
+  // the name at the limb: lower right by preference, else whichever diagonal limb point finds room on the map
   function bodyLabel(body, c, r, cam) {
     const cand = [[0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+    const cands = [];
     for (const [dx, dy] of cand) {
       const x = c.x + dx * (r + 10), y = c.y + dy * (r + 10);
-      if (x > 60 && x < cam.w - 60 && y > 40 && y < cam.h - 40) { label(body.name.toUpperCase(), x, y, { font: '500 13px ' + MONO, color: 'rgba(169,182,198,0.92)', align: dx > 0 ? 'left' : 'right', prio: PRIO.chrome, still: true }); return; }
+      if (x > 60 && x < cam.w - 60 && y > 40 && y < cam.h - 40) cands.push([dx * (r + 10), dy * (r + 10) - LH / 2, dx > 0 ? 'left' : 'right']);
     }
+    if (cands.length) label(body.name.toUpperCase(), c.x, c.y, { font: '500 13px ' + MONO, color: 'rgba(169,182,198,0.92)', prio: PRIO.chrome, cands });
   }
 
   function drawBody(sim, cam) {
@@ -443,12 +447,163 @@
     if (r > 12) bodyLabel(body, c, r, cam);
   }
 
+  // ---- the central body when its disc is off the clear map ----
+  // Zoomed in on a fight in high orbit the planet can be hundreds of thousands of km away and nowhere on the map.
+  // A short arc of its limb light lies just inside the edge of the clear map in its direction, and a label there,
+  // with an arrow pointing at its centre, gives its name and the altitude the navigator's orbit line measures
+  // (height above the surface, so the two numbers agree): of the selected ship, else the followed one, else of
+  // the middle of the map.
+  const LIMB_W = 150, LIMB_TOP = 10;
+  const limbs = new Map(); // body kind → the arc sprite: +y points at the body, the arc is convex toward the map
+  function limbSprite(kind) {
+    let c = limbs.get(kind);
+    if (c) return c;
+    const H = 40, Rc = 240;
+    c = mk(LIMB_W, H);
+    const g = c.getContext('2d');
+    const col = kind === 'gas' ? '255,200,150' : kind === 'ice' ? '190,215,255' : '200,205,225';
+    const a0 = -Math.PI / 2 - 0.36, a1 = -Math.PI / 2 + 0.36;
+    for (const [w, a] of [[12, 0.05], [7, 0.08], [3.5, 0.16], [1.2, 0.55]]) {
+      g.strokeStyle = 'rgba(' + col + ',' + a + ')'; g.lineWidth = w;
+      g.beginPath(); g.arc(LIMB_W / 2, LIMB_TOP + Rc, Rc, a0, a1); g.stroke();
+    }
+    // fade both ends out, so it reads as a glimpse of the limb and not a bar
+    const f = g.createLinearGradient(0, 0, LIMB_W, 0);
+    f.addColorStop(0, 'rgba(0,0,0,0)'); f.addColorStop(0.3, 'rgba(0,0,0,1)'); f.addColorStop(0.7, 'rgba(0,0,0,1)'); f.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalCompositeOperation = 'destination-in'; g.fillStyle = f; g.fillRect(0, 0, LIMB_W, H);
+    limbs.set(kind, c);
+    return c;
+  }
+  function drawBodyMarker(sim, cam, sel) {
+    const body = sim.body; if (!body || !(body.radius > 0)) return;
+    const safe = safeRect(cam);
+    if (safe.x1 - safe.x0 < 80 || safe.y1 - safe.y0 < 60) return;
+    const c = cam.toScreen({ x: 0, y: 0 }), r = body.radius * cam.zoom;
+    // any part of the disc on the clear map: the body is its own marker
+    const nx = Math.max(safe.x0 - c.x, 0, c.x - safe.x1), ny = Math.max(safe.y0 - c.y, 0, c.y - safe.y1);
+    if (Math.hypot(nx, ny) <= r) return;
+    const mx = (safe.x0 + safe.x1) / 2, my = (safe.y0 + safe.y1) / 2;
+    const d = Math.hypot(c.x - mx, c.y - my); if (!(d > 0)) return;
+    const ux = (c.x - mx) / d, uy = (c.y - my) / d;
+    // the limb light just inside the edge of the clear map, in the body's direction from the middle of the map
+    const t = rayLimit({ x: mx, y: my }, ux, uy, safe) - 14;
+    const LABEL = 'rgba(169,182,198,0.92)';
+    ctx.save();
+    ctx.translate(mx + ux * t, my + uy * t); ctx.rotate(Math.atan2(-ux, uy));
+    ctx.drawImage(limbSprite(body.kind), -LIMB_W / 2, -LIMB_TOP);
+    ctx.restore();
+    // whose altitude: the ship the camera follows, else the selected one, else the middle of the map. A hostile
+    // we hold only as a contact or a track is where our track puts her, and her altitude is rounded to the track's
+    // error with the error on it (nothing short of a solution is known to the kilometre, as sensors.js speaks it);
+    // she is named once her class is known.
+    const live = (s) => (s && !s.destroyed ? s : null);
+    const f = live(cam.follow ? sim.byId(cam.follow) : null) || live(sel);
+    let who = 'map centre', name = null, alt = '';
+    if (f) {
+      const v = viewOf(sim, f);
+      const h = Math.hypot(v.pos.x, v.pos.y) - body.radius;
+      if (v.ghost && v.posErr > 0) {
+        const step = Math.max(1e4, Math.pow(10, Math.floor(Math.log10(v.posErr))));
+        alt = km(Math.round(h / step) * step) + ' ±' + km(v.posErr);
+      } else alt = U.fmt.dist(h);
+      if (v.ghost && (v.q < TQ() || !v.classKnown)) who = 'the contact';
+      else who = name = f.name;
+    } else { const w = cam.toWorld(mx, my); alt = U.fmt.dist(Math.hypot(w.x, w.y) - body.radius); }
+    const phone = cam.w < 700, inset = phone ? 18 : 26;
+    let lines;
+    if (phone) {
+      // a phone's map is a strip: one line there, and it names the ship, since the panel under the map may be
+      // another ship's. A name too long for the strip drops its prefix ("JCS Harkness" to "Harkness").
+      const line = (n) => body.name.toUpperCase() + ' · ' + n + ' ' + alt.replace(/ ±/, ' up ±') + (/ ±/.test(alt) ? '' : ' up');
+      const room = safe.x1 - safe.x0 - 2 * inset - 20;
+      let text = line(who);
+      if (name && measure(text, F12B) > room) text = line(name.replace(/^[A-Z]{2,4} /, ''));
+      lines = [{ text, font: F12B, color: LABEL }];
+    } else lines = [{ text: body.name.toUpperCase(), font: '500 13px ' + MONO, color: LABEL }, { text: who + ' at altitude ' + alt, color: COLORS.dim }];
+    // it yields to everything else on the map, and keeps a clear gap from every block rather than touch one; with
+    // no spot on the edge clear of every hull it gives the body's name alone ('← EUROPA'), and with none for that
+    // it is not printed (the limb light still shows the way)
+    const short = [{ text: body.name.toUpperCase(), font: phone ? F12B : '500 13px ' + MONO, color: LABEL }];
+    edgeLabel(cam, lines, c.x, c.y, { color: LABEL, prio: PRIO.mark, keep: false, slide: 6, inset, deep: 3, pad: 6, short });
+  }
+  // A label on the edge of the clear map for something off it (an inbound salvo, the planet), with an arrow in its
+  // box pointing at it. The arrow is part of the label, so wherever the layout has to move the box to clear what is
+  // already placed, the arrow moves with it and still points the right way, and nothing can print over it.
+  // o: { color, prio, keep, fill, slide (candidates each way along the edge, default 3),
+  // inset (px the box keeps off the edge, default 1), deep (rows of candidates further in from the edge, default 0),
+  // pad (extra clearance from other labels), arrow: a solid head for fill, else a short shaft with a small filled head,
+  // short: the lines it falls back to rather than cover a hull }.
+  function edgeLabel(cam, lines, tx, ty, o) {
+    const it = edgeItem(cam, lines, tx, ty, o);
+    if (it) queue.push(it);
+  }
+  function edgeItem(cam, lines, tx, ty, o) {
+    const safe = safeRect(cam);
+    // the point on the edge of the clear map in the target's direction from the middle of it
+    const mx = (safe.x0 + safe.x1) / 2, my = (safe.y0 + safe.y1) / 2;
+    const d = Math.hypot(tx - mx, ty - my); if (!(d > 0)) return null;
+    const ux = (tx - mx) / d, uy = (ty - my) / d;
+    const t = rayLimit({ x: mx, y: my }, ux, uy, safe);
+    const ex = mx + ux * t, ey = my + uy * t;
+    const ins = o.inset || 1, AW = 16;
+    const side = Math.abs(ex - safe.x0) < 2 || Math.abs(ex - safe.x1) < 2;
+    const p = absPt(ex, ey);
+    const it = { prio: o.prio, ax: p.x, ay: p.y, w: 0, h: 0, cands: null, keep: !!o.keep, pad: o.pad, edge: true, lines: null };
+    // the box, its size and its candidates for one set of lines; false when a label that need not show has no room
+    const layout = (ls) => {
+      let tw = 0;
+      for (const l of ls) tw = Math.max(tw, measure(l.text, l.font || F12) + 2);
+      const w = tw + AW, h = ls.length * LH;
+      if (!o.keep && (safe.x1 - safe.x0 < w + 2 * ins + 2 || safe.y1 - safe.y0 < h + 2 * ins + 2)) return false;
+      // the box pushed just inside that point; then slid along the edge it touches
+      const bx = (x) => U.clamp(x, safe.x0 + ins, safe.x1 - w - ins), by = (y) => U.clamp(y, safe.y0 + ins, safe.y1 - h - ins);
+      const x0 = bx(ex - w / 2), y0 = by(ey - h / 2);
+      const cands = [];
+      const n = o.slide || 3;
+      // along the edge first; then a step further in from it, for a narrow map where the edge is already taken
+      for (let m = 0; m <= (o.deep || 0); m++) {
+        const inX = side ? (ex < mx ? 1 : -1) * m * 48 : 0, inY = side ? 0 : (ey < my ? 1 : -1) * m * (h + 6);
+        for (let k = 0; k <= 2 * n; k++) {
+          const s = k % 2 ? (k + 1) / 2 : -k / 2;
+          const cx = bx(x0 + inX + (side ? 0 : s * (w / 2 + GAPROW))), cy = by(y0 + inY + (side ? s * (h + 6) : 0));
+          cands.push([cx - ex, cy - ey, 'left']);
+        }
+      }
+      it.lines = ls; it.w = w; it.h = h; it.cands = cands;
+      return true;
+    };
+    if (!layout(lines) && !(o.short && layout(o.short))) return null;
+    // the short form, once, when the full one finds no spot clear of the hulls
+    if (o.short && it.lines !== o.short) it.shrink = () => it.lines !== o.short && layout(o.short);
+    it.draw = (bx0, by0) => {
+      // the arrow at the end of the first line nearer the target, turned to point at it from where the box landed
+      const w = it.w, toRight = tx >= bx0 + w / 2;
+      const ax = toRight ? bx0 + w - 7 : bx0 + 7, ay = by0 + LH / 2;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.atan2(ty - ay, tx - ax));
+      if (o.fill) { ctx.fillStyle = o.color; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-5, -5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); }
+      else {
+        // a short shaft and a 6 px filled head: a thin open chevron pointing steeply down read as a tick
+        ctx.strokeStyle = o.color; ctx.fillStyle = o.color; ctx.lineWidth = 1.5; ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(0, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(0, -4); ctx.lineTo(0, 4); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+      const tx0 = toRight ? bx0 : bx0 + AW;
+      it.lines.forEach((l, i) => paint(l.text, tx0, by0 + i * LH + LH / 2, { font: l.font || F12, color: l.color }));
+    };
+    return it;
+  }
+
   // ---- text and the label layer ------------------------------------------------------------------------------
   // Nothing writes on the map directly. Every label is queued with a priority, measured, and laid out once at the
   // end of the frame: a ship's name outranks a threat countdown, which outranks a ring caption, which outranks
   // telemetry. A box that cannot find room inside the free rectangle (cam.inset) without landing on one already
   // placed is pushed along its candidate list and then dropped, so two labels never share pixels.
-  const PRIO = { scale: 210, name: 100, threat: 80, ring: 60, mark: 52, tele: 40, chrome: 12 };
+  // The hull a hint points at, the selected ship's target and the hulls an open decision card names place their
+  // blocks first; then the blocks of hulls on the clear map; then the edge
+  // lines of the selected and hinted hulls when they are off it; then threats and a story marker's label; then
+  // the scale bar, which yields to all of them.
+  const PRIO = { hint: 120, name: 100, edge: 97, threat: 80, scale: 61, ring: 60, mark: 52, tele: 40, chrome: 12 };
   const LH = 15;            // the box height of one text line
   // The clear space a box keeps around itself. Two labels that end up on the same text row run together and read
   // as one sentence ('10 × slug · 1s' butting into 'arrive · 29s'), so a pair that shares a row is held a readable
@@ -464,7 +619,45 @@
   const blocks = new Map(); // ship id → its stacked block this frame
 
   // The part of the canvas the HUD and any open band leave clear (cam.inset, in canvas pixels, from main.js).
-  function safeRect(cam) { const i = cam.inset || { l: 0, r: 0, t: 0, b: 0 }; return { x0: (i.l || 0) + 8, y0: (i.t || 0) + 8, x1: cam.w - (i.r || 0) - 8, y1: cam.h - (i.b || 0) - 8 }; }
+  // Less what the inset does not count: a band across the map (the phone's comms banner at the foot of the map)
+  // ends the clear map at its edge while it shows.
+  function safeRect(cam) {
+    const i = cam.inset || { l: 0, r: 0, t: 0, b: 0 };
+    const r = { x0: (i.l || 0) + 8, y0: (i.t || 0) + 8, x1: cam.w - (i.r || 0) - 8, y1: cam.h - (i.b || 0) - 8 };
+    for (const b of hudOf(cam).bands) {
+      // a band that would leave under 60 px of map is not counted: the map is already a strip
+      if (b.y0 > (r.y0 + r.y1) / 2) { if (b.y0 - 6 - r.y0 >= 60) r.y1 = Math.min(r.y1, b.y0 - 6); }
+      else if (r.y1 - (b.y1 + 6) >= 60) r.y0 = Math.max(r.y0, b.y1 + 6);
+    }
+    return r;
+  }
+  // The HUD boxes that sit over the clear map, in canvas pixels, read from the page about eight times a second:
+  // the comms banner (#toast) and the map key (#legend). One as wide as most of the map is a band (safeRect ends
+  // the map at it); a smaller one is a box the label layer holds as already placed, so no label prints under it.
+  const hud = { at: -1e9, key: '', bands: [], boxes: [] };
+  function hudOf(cam) {
+    // read again at once when the map's size or its insets change (a hint card opening moves the map key with it)
+    const i0 = cam.inset || {}, now = typeof performance !== 'undefined' ? performance.now() : 0;
+    const key = cam.w + 'x' + cam.h + ':' + (i0.l || 0) + ',' + (i0.r || 0) + ',' + (i0.t || 0) + ',' + (i0.b || 0);
+    if (now - hud.at < 120 && hud.key === key) return hud;
+    hud.at = now; hud.key = key; hud.bands = []; hud.boxes = [];
+    try {
+      if (typeof document === 'undefined' || !canvas || (OD.Bridge && OD.Bridge.active)) return hud;
+      const cr = canvas.getBoundingClientRect(); if (!(cr.width > 0)) return hud;
+      const k = cam.w / cr.width, i = cam.inset || { l: 0, r: 0, t: 0, b: 0 };
+      const x0 = (i.l || 0), x1 = cam.w - (i.r || 0), y0 = (i.t || 0), y1 = cam.h - (i.b || 0);
+      for (const id of ['toast', 'legend']) {
+        const el = document.getElementById(id); if (!el || el.hidden) continue;
+        const q = el.getBoundingClientRect(); if (!(q.width > 0 && q.height > 0)) continue;
+        const b = { x0: (q.left - cr.left) * k, y0: (q.top - cr.top) * k, x1: (q.right - cr.left) * k, y1: (q.bottom - cr.top) * k, hud: id };
+        // only the part over the clear map matters; the inset already counts a panel beside it
+        if (b.x1 <= x0 || b.x0 >= x1 || b.y1 <= y0 || b.y0 >= y1) continue;
+        if (getComputedStyle(el).visibility === 'hidden') continue;
+        if (id === 'toast' && Math.min(b.x1, x1) - Math.max(b.x0, x0) > 0.6 * (x1 - x0)) hud.bands.push(b); else hud.boxes.push(b);
+      }
+    } catch (e) { hud.bands = []; hud.boxes = []; }
+    return hud;
+  }
   function inSafe(p, r) { return p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1; }
   // Largest t ≥ 0 with (s + t·u) still inside the safe rect, or 0 when s is outside it.
   function rayLimit(s, ux, uy, r) {
@@ -507,7 +700,9 @@
     ctx.strokeText(text, x, y);
     ctx.fillStyle = o.color || COLORS.ink; ctx.fillText(text, x, y);
   }
-  // Queue one line of text. o: { font, color, align, prio, keep, still, cands }.
+  // Queue one line of text. o: { font, color, align, prio, keep, still, cands, obs (false: may cover every mark),
+  // obsLevel (keep off marks of this level and harder only: 0 glyphs and ticks, 1 bar lines, 2 hulls),
+  // pad (extra clearance from other labels) }.
   function label(text, x, y, o) {
     if (text == null || text === '') return;
     o = o || {};
@@ -522,7 +717,7 @@
       for (const dy of steps) cands.push([0, -h / 2 + dy, align]);
     }
     queue.push({
-      prio: o.prio != null ? o.prio : PRIO.tele, ax: p.x, ay: p.y, w, h, cands, keep: !!o.keep, bg: o.bg,
+      prio: o.prio != null ? o.prio : PRIO.tele, ax: p.x, ay: p.y, w, h, cands, keep: !!o.keep, bg: o.bg, obs: o.obs, obsLevel: o.obsLevel, pad: o.pad,
       draw: (x0, y0) => paint(text, x0, y0 + h / 2, { font, color: o.color }),
     });
   }
@@ -556,56 +751,213 @@
     const over = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
     return over > LH * 0.55 ? GAPROW : GAPX;
   }
-  function hits(b, list) {
+  // pad: extra clearance one label asks for all round (the planet's edge line keeps a clear gap from every block)
+  function hits(b, list, pad) {
+    const p = pad || 0;
     for (const o of list) {
-      const gx = gapFor(b, o);
-      if (b.x0 < o.x1 + gx && b.x1 + gx > o.x0 && b.y0 < o.y1 + GAPY && b.y1 + GAPY > o.y0) return true;
+      const gx = gapFor(b, o) + p;
+      if (b.x0 < o.x1 + gx && b.x1 + gx > o.x0 && b.y0 < o.y1 + GAPY + p && b.y1 + GAPY + p > o.y0) return true;
     }
     return false;
+  }
+  // ---- marks the label layer keeps clear ----
+  // Three levels. 0: a contact's '?' or hull glyph and the end ticks of its error bar; no label is ever placed over
+  // them, so a hint that says "tap the ?" always finds it. 1: the bar's line between the ticks. 2: a hull as drawn,
+  // icon or picture. A label takes the first candidate clear of all three, then one clear of 0 and 1, then one
+  // clear of 0 alone; a label that must show moves to the nearest spot clear of all three before it settles. Each mark is a box turned to its own axis, in canvas pixels: centre, unit axis u,
+  // half a along u and half b across it.
+  // Hard marks: the selected hull and her selection ring, and the hull a hint points at and its ring. A label that
+  // must show, and any label on the edge of the map, keeps off them at every step (a block sheds lines first, an
+  // edge label takes its short form), so no name, scale number or edge line prints over the ship the player is
+  // looking at. Every other label treats the hulls as hulls (level 2) and does not look at the rings, so a turn
+  // arc's caption still sits by its own arc.
+  let obstacles = [];
+  const OBS_GAP = 2;
+  const RING_HULL_MAX = 56; // px: a selection ring this far out or less hugs the hull, and is a hard mark with her
+  function obstacle(cx, cy, ux, uy, a, b, level, id, hard) { if (isFinite(cx) && isFinite(cy) && isFinite(a) && isFinite(b)) obstacles.push({ cx, cy, ux, uy, a, b, level, id, hard: !!hard }); }
+  // a ring's stroke, r px from its centre and t px either side of it
+  // (a mark for the labels that must show only: level 3 is past every level the others keep off)
+  function ringObstacle(cx, cy, r, t, id) { if (isFinite(cx) && isFinite(cy) && r > 0) obstacles.push({ cx, cy, ux: 1, uy: 0, a: r + t, b: r + t, ring: r, t, level: 3, id, hard: true }); }
+  // separating axes: the label's x and y and the mark's own two axes
+  function boxHitsObs(bx, o, gap) {
+    if (o.ring) {
+      // a box touches a ring's stroke when its nearest point is inside the outer edge and its farthest corner is
+      // outside the inner edge; a label wholly inside a large ring, clear of the hull, is not on it
+      const x0 = bx.x0 - gap - o.cx, x1 = bx.x1 + gap - o.cx, y0 = bx.y0 - gap - o.cy, y1 = bx.y1 + gap - o.cy;
+      const near = Math.hypot(Math.max(x0, 0, -x1), Math.max(y0, 0, -y1));
+      const far = Math.hypot(Math.max(Math.abs(x0), Math.abs(x1)), Math.max(Math.abs(y0), Math.abs(y1)));
+      return near <= o.ring + o.t && far >= o.ring - o.t;
+    }
+    const hx = (bx.x1 - bx.x0) / 2 + gap, hy = (bx.y1 - bx.y0) / 2 + gap;
+    const dx = (bx.x0 + bx.x1) / 2 - o.cx, dy = (bx.y0 + bx.y1) / 2 - o.cy;
+    const ax = Math.abs(o.ux), ay = Math.abs(o.uy);
+    if (Math.abs(dx) > hx + o.a * ax + o.b * ay) return false;
+    if (Math.abs(dy) > hy + o.a * ay + o.b * ax) return false;
+    if (Math.abs(dx * o.ux + dy * o.uy) > o.a + hx * ax + hy * ay) return false;
+    if (Math.abs(-dx * o.uy + dy * o.ux) > o.b + hx * ay + hy * ax) return false;
+    return true;
+  }
+  // does the box land on a mark of this level or a harder one (and, for a label that must show, on a hard mark)
+  function hitsObs(b, level, hard) {
+    for (const o of obstacles) { if (o.level > level && !(hard && o.hard)) continue; if (boxHitsObs(b, o, OBS_GAP)) return true; }
+    return false;
+  }
+  function hitsHard(b) {
+    for (const o of obstacles) if (o.hard && boxHitsObs(b, o, OBS_GAP)) return true;
+    return false;
+  }
+  function obsExtent(o) { return { ex: o.a * Math.abs(o.ux) + o.b * Math.abs(o.uy), ey: o.a * Math.abs(o.uy) + o.b * Math.abs(o.ux) }; }
+  // The nearest place for `box` inside the safe rect that `blocked` does not refuse. A clear spot nearest to the
+  // start sits either where the box already is on an axis or flush beside one of the placed boxes or contact
+  // marks, so only those lines are tried. Null when none is clear.
+  function clearSpot(box, taken, safe, blocked, marks) {
+    const w = box.x1 - box.x0, h = box.y1 - box.y0;
+    const cx = (x) => Math.max(safe.x0, Math.min(x, safe.x1 - w)), cy = (y) => Math.max(safe.y0, Math.min(y, safe.y1 - h));
+    const xs = new Set([cx(box.x0)]), ys = new Set([cy(box.y0)]);
+    for (const o of taken) {
+      xs.add(cx(o.x1 + GAPROW + 1)); xs.add(cx(o.x0 - w - GAPROW - 1));
+      ys.add(cy(o.y1 + GAPY + 6)); ys.add(cy(o.y0 - h - GAPY - 6)); // a clear gap, so it does not read as that box's next line
+    }
+    // the marks near the box only: in a crowded fight the far ones add lines to try and never the nearest spot
+    const reach = Math.max(360, 3 * Math.max(w, h));
+    for (const o of marks || []) {
+      const e = obsExtent(o);
+      if (o.cx + e.ex < box.x0 - reach || o.cx - e.ex > box.x1 + reach || o.cy + e.ey < box.y0 - reach || o.cy - e.ey > box.y1 + reach) continue;
+      xs.add(cx(o.cx + e.ex + OBS_GAP + 1)); xs.add(cx(o.cx - e.ex - w - OBS_GAP - 1));
+      ys.add(cy(o.cy + e.ey + OBS_GAP + 1)); ys.add(cy(o.cy - e.ey - h - OBS_GAP - 1));
+    }
+    let best = null, bestD = Infinity;
+    for (const x of xs) for (const y of ys) {
+      const d = Math.abs(x - box.x0) + Math.abs(y - box.y0);
+      if (d >= bestD) continue;
+      const b = { x0: x, y0: y, x1: x + w, y1: y + h };
+      if (b.y1 > safe.y1 + 0.5 || blocked(b)) continue;
+      best = b; bestD = d;
+    }
+    return best;
   }
   // Lay the frame's labels out and paint them, highest priority first.
   function drawLabels(cam) {
     const sz = Render._size;
     ctx.setTransform(sz.dpr, 0, 0, sz.dpr, 0, 0);
     const safe = safeRect(cam);
-    const items = queue.slice().sort((a, b) => (b.prio - a.prio) || (a.ay - b.ay) || (a.ax - b.ax));
-    const taken = [];
-    let dropped = 0;
+    // A ship whose hull is off the clear map (under a panel or a card) never has her block pulled in beside some
+    // other hull. One that must show (the selected ship, the one a hint points at) becomes one edge line, her name
+    // with an arrow at her; one that need not keeps to the spots beside her own hull. Either way the blocks of
+    // hulls on the clear map are placed first. (A hull drawn larger than half the map has her block in the corner,
+    // not beside her: off the map, that block is her edge line too, or nothing.)
+    for (let i = 0; i < queue.length; i++) {
+      const it = queue[i];
+      if (!it.block) continue;
+      const m = it.hr;
+      if (it.hx >= safe.x0 - m && it.hx <= safe.x1 + m && it.hy >= safe.y0 - m && it.hy <= safe.y1 + m) continue;
+      if (it.keep) {
+        const l = it.edgeLine();
+        queue[i] = edgeItem(cam, [l], it.hx, it.hy, { color: l.color, prio: PRIO.edge + (it.prio >= PRIO.hint ? 2 : it.prio >= PRIO.name + 6 ? 1 : 0), keep: true, slide: 4 });
+      } else if (it.corner) queue[i] = null;
+      else it.prio -= 10;
+    }
+    const items = queue.filter(Boolean).sort((a, b) => (b.prio - a.prio) || (a.ay - b.ay) || (a.ax - b.ax));
+    // the map key over the clear map (a phone's) is held as a box already placed: every label keeps off it
+    const taken = hudOf(cam).boxes.map((b) => Object.assign({}, b));
+    let dropped = 0, overlaps = 0;
     for (const it of items) {
       if (it.size) it.size();
-      const cands = it.cands && it.cands.length ? it.cands : [[0, -it.h / 2, 'left']];
-      let box = null;
-      for (const c of cands) {
-        const b = boxAt(it, c);
-        if (!insideSafe(b, safe) || hits(b, taken)) continue;
-        box = b; break;
-      }
-      if (!box && it.keep) {
-        // a label that must show (an edge marker for a threat off the map): first any candidate inside the safe
-        // rect, then the first candidate clamped into it. Two markers clamped to the same corner would print on
-        // the same pixels, so a clamped box slides down and up a line at a time until it clears what is placed.
-        for (const c of cands) { const b = boxAt(it, c); if (insideSafe(b, safe)) { box = b; break; } }
-        if (!box) {
-          const b = boxAt(it, cands[0]);
-          box = { x0: U.clamp(b.x0, safe.x0, Math.max(safe.x0, safe.x1 - it.w)), y0: U.clamp(b.y0, safe.y0, Math.max(safe.y0, safe.y1 - it.h)) };
-          box.x1 = box.x0 + it.w; box.y1 = box.y0 + it.h;
+      // the marks this label keeps off: all three levels unless it asks for fewer (obsLevel), none with obs: false;
+      // one that must show, and every edge label (the planet's included), keeps off the hard marks at every level
+      const top = it.obs === false || !obstacles.length ? -1 : Math.min(2, it.obsLevel != null ? it.obsLevel : 2), pad = it.pad || 0;
+      const hard = !!(it.keep || it.edge) && top >= 0;
+      const free = (b, level) => insideSafe(b, safe) && !hits(b, taken, pad) && !(level >= 0 && hitsObs(b, level, hard));
+      const candsOf = () => (it.cands && it.cands.length ? it.cands : [[0, -it.h / 2, 'left']]);
+      // (a ship's block takes a spot whose name line is nearer her own hull than any other first; a spot nearer
+      // another hull only when none is, and then it draws a leader to her)
+      const ownNear = (b) => !it.block || it.corner || !nearerOther(it, b.x0, b.y0);
+      const pick = (level, ownOnly) => {
+        let alt = null;
+        for (const c of candsOf()) {
+          const b = boxAt(it, c);
+          if (!free(b, level)) continue;
+          if (ownNear(b)) return b;
+          if (!alt) alt = b;
         }
-        if (hits(box, taken)) {
-          const y00 = box.y0;
-          for (let k = 1; k <= 12; k++) {
-            const y = y00 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (it.h + GAPY);
-            if (y < safe.y0 || y + it.h > safe.y1) continue;
-            const b2 = { x0: box.x0, y0: y, x1: box.x1, y1: y + it.h };
-            if (!hits(b2, taken)) { box = b2; break; }
+        return ownOnly ? null : alt;
+      };
+      // where a label that must show starts from: its first candidate inside the safe rect, else the first one
+      // clamped into it
+      const startOf = () => {
+        const cands = candsOf();
+        for (const c of cands) { const b = boxAt(it, c); if (insideSafe(b, safe)) return b; }
+        const b = boxAt(it, cands[0]);
+        const st = { x0: U.clamp(b.x0, safe.x0, Math.max(safe.x0, safe.x1 - it.w)), y0: U.clamp(b.y0, safe.y0, Math.max(safe.y0, safe.y1 - it.h)) };
+        st.x1 = st.x0 + it.w; st.y1 = st.y0 + it.h;
+        return st;
+      };
+      const nudge = (level) => clearSpot(startOf(), taken, safe, (b) => hits(b, taken, pad) || hitsObs(b, level, hard), obstacles);
+      let box = null;
+      if (it.edge) {
+        // An edge label: a spot on the edge clear of every hull, then (one that must show) the nearest spot clear
+        // of them, then its short form the same way ('← EUROPA'). Only one that must show goes on to cross a hull.
+        const lv = (n) => Math.min(top, n);
+        const clear = () => pick(lv(2)) || (it.keep && top >= 0 ? nudge(lv(2)) : null);
+        box = clear();
+        while (!box && it.shrink && it.shrink()) box = clear();
+        if (!box && it.keep && top >= 0) box = pick(lv(1)) || nudge(lv(1)) || pick(0) || nudge(0);
+      } else {
+        // first a place clear of every contact mark: a candidate clear of hulls too, then one that crosses a hull,
+        // then (for a label that must show) the nearest spot clear of them. A block that must show and finds none
+        // sheds lines until it does (its telemetry, then its bars, then its class; the ship's panel carries them
+        // all): her name beside her beats a block over a '?' and its line.
+        // A hull's block is nudged no farther than a few lines from her hull while it can still shed a line: her
+        // name beside her beats her whole block across the map. Only a block with nothing left to shed goes
+        // farther, and then whole, as before.
+        const near = it.block && !it.corner ? it.R0 + 4 * LH : Infinity;
+        const close = (b) => (b && (near === Infinity || Math.hypot(Math.max(b.x0 - it.hx, 0, it.hx - b.x1), Math.max(b.y0 - it.hy, 0, it.hy - b.y1)) <= near) ? b : null);
+        const strict = (far) => pick(top) || (top === 2 ? pick(1) : null) || (it.keep && top >= 0 && !it.stay ? (far ? nudge(top) || (top === 2 ? nudge(1) : null) : close(nudge(top)) || (top === 2 ? close(nudge(1)) : null)) : null);
+        const cut0 = it.cut;
+        // A block that must show sheds its telemetry, then its bars, before it takes a spot on another hull or one
+        // nearer another hull than hers: her name and class beside her beat her whole block printed over the
+        // missile boats next to her, or beside the wrong hull. With no such spot even then, the whole block takes
+        // the nearest spot clear of the hulls (with a leader to her); failing that, the shorter block is the one
+        // that crosses a hull.
+        if (it.block && it.keep && !it.corner && top === 2) {
+          const hullFree = (own) => { const b = pick(2, own) || close(nudge(2)); return b && (!own || ownNear(b)) ? b : null; };
+          for (const own of [true, false]) {
+            if (!own) { it.cut = cut0; it.size(); }
+            box = hullFree(own);
+            while (!box && it.cut < 2) { const h0 = it.h; it.cut++; it.size(); if (it.h < h0) box = hullFree(own); }
+            if (box) break;
           }
         }
+        if (!box) box = strict(false);
+        while (!box && it.keep && top >= 1 && it.shrink && it.shrink()) box = strict(false);
+        if (!box && it.keep && near !== Infinity) { it.cut = cut0; it.size(); box = strict(true); while (!box && top >= 1 && it.shrink && it.shrink()) box = strict(true); }
+        // then a place that crosses a bar's line but never a glyph or an end tick
+        if (!box && top > 0) box = pick(0);
+        if (!box && it.keep && top >= 0) box = nudge(0);
+      }
+      // (the scale bar is a reference, not a reading: with no room left for it, it is left off rather than printed
+      // over a label)
+      if (!box && it.keep && !it.optional) {
+        // a label that must show (an edge marker for a threat off the map): the first candidate inside the safe
+        // rect, else the first one clamped into it. A clamped box can land on something already placed (two
+        // markers in one corner, or a threat label on the block pinned in the corner at close zoom), so it moves
+        // to the nearest spot that clears every placed box and the hard marks, then every placed box; only a map
+        // with no such spot left prints it over one.
+        box = startOf();
+        const blocked = (b) => hits(b, taken) || (hard && hitsHard(b));
+        if (blocked(box)) box = clearSpot(box, taken, safe, blocked, obstacles) || (hits(box, taken) ? clearSpot(box, taken, safe, (b) => hits(b, taken)) : null) || box;
       }
       if (!box) { dropped++; continue; }
+      if (hits(box, taken)) overlaps++;
       taken.push(box);
+      box.prio = it.prio; box.corner = !!it.corner; box.keep = !!it.keep;
       if (it.bg !== false) backing(box);
       try { it.draw(box.x0, box.y0); } catch (e) { Render.lastError = e; }
     }
-    Render.labelCount = { queued: items.length, placed: items.length - dropped, dropped };
+    // what the checks read: how many labels found room, and how many had to be printed over another one
+    Render.labelCount = { queued: items.length, placed: items.length - dropped, dropped, overlaps };
+    Render.labelBoxes = taken.filter((b) => !b.hud);
+    Render.obstacles = obstacles;
     queue = []; blocks.clear();
   }
 
@@ -623,14 +975,28 @@
     // top-left corner of the map instead, and slides down a line at a time behind any block already there
     const corner = (ship.length || 100) * cam.zoom > 0.5 * Math.min(cam.w, cam.h);
     const safe0 = corner ? safeRect(cam) : null;
-    b = { id: ship.id, ax: corner ? safe0.x0 + 4 : p.x, ay: corner ? safe0.y0 + 4 : p.y, R0, w: 0, h: LH, lines: [], head: [], tele: [], bars: null, prio: PRIO.name, keep: false, cands: null, corner };
+    // cut: how many steps the label layer has shed to find room clear of the contact marks (1 the telemetry,
+    // 2 the bars, 3 the class line); see drawLabels
+    // (hx, hy, hr: where her hull is drawn and half its length, for the test whether it is on the clear map)
+    b = { id: ship.id, ax: corner ? safe0.x0 + 4 : p.x, ay: corner ? safe0.y0 + 4 : p.y, R0, w: 0, h: LH, lines: [], head: [], tele: [], bars: null, showBars: false, cut: 0, prio: PRIO.name, keep: false, cands: null, corner, block: true, hx: p.x, hy: p.y, hr: corner ? (ship.length || 100) * cam.zoom / 2 : 8 };
+    // whose it is in one line: her name, or 'contact' for a hostile we have not identified (the head of a hull
+    // drawn nowhere this frame, and the edge line of one off the clear map)
+    b.edgeLine = () => {
+      let v = null; try { v = viewOf(sim, ship); } catch (e) { v = null; }
+      const bare = v && v.ghost && (v.q < TQ() || !v.classKnown);
+      return { text: bare ? 'contact' : ship.name, font: F13B, color: bare ? COLORS.unknown : OD.Ships.FACTIONS[ship.faction].color };
+    };
     b.size = () => {
-      b.lines = b.head.concat(b.tele);
+      // telemetry for a hull drawn nowhere this frame (off the map, her block pinned in the corner) still says whose
+      // it is
+      if (!b.head.length && b.tele.length) b.head = [b.edgeLine()];
+      b.lines = (b.cut >= 3 ? b.head.slice(0, 1) : b.head).concat(b.cut >= 1 ? [] : b.tele);
+      b.showBars = !!b.bars && b.cut < 2;
       let w = 0;
       for (const l of b.lines) w = Math.max(w, measure(l.text, l.font || F12) + 2);
-      if (b.bars) w = Math.max(w, 44);
+      if (b.showBars) w = Math.max(w, 44);
       b.w = Math.max(w, 26);
-      b.h = Math.max(LH, b.lines.length * LH + (b.bars ? 20 : 0));
+      b.h = Math.max(LH, b.lines.length * LH + (b.showBars ? 20 : 0));
       if (b.corner) { b.cands = []; for (let k = 0; k < 8; k++) b.cands.push([0, k * (b.h + 4), 'left']); return; }
       const d = b.R0 + 12, sides = [[d, 'left'], [-d, 'right']];
       const tops = [-LH - 2, -LH - 2 + LH, -LH - 2 - LH, b.R0 + 8, -b.h - b.R0 - 8, -LH - 2 + 2 * LH, -LH - 2 - 2 * LH, -LH - 2 + 3 * LH];
@@ -640,7 +1006,7 @@
     b.draw = (x0, y0) => {
       let y = y0;
       for (const l of b.lines) { paint(l.text, x0, y + LH / 2, { font: l.font || F12, color: l.color }); y += LH; }
-      if (b.bars) {
+      if (b.showBars) {
         const bw = 40, bh = 3;
         b.bars.forEach((bar, i) => {
           ctx.fillStyle = 'rgba(5,7,12,0.6)'; ctx.fillRect(x0 - 1, y + 2 + i * 6 - 1, bw + 2, bh + 2);
@@ -648,16 +1014,35 @@
           ctx.fillStyle = bar[1]; ctx.fillRect(x0, y + 2 + i * 6, bw * U.clamp(bar[0], 0, 1), bh);
         });
       }
-      // a leader back to the hull once the block has been pushed clear of it
+      // a leader back to the hull once the block has been pushed clear of it, or once it sits nearer another hull
+      // than its own (a name beside the wrong hull reads as hers)
       const right = x0 >= b.ax, nx = right ? x0 - 3 : x0 + b.w + 3, ny = y0 + Math.min(b.h, LH) / 2;
-      if (!b.corner && (Math.abs(nx - b.ax) > b.R0 + 22 || Math.abs(ny - b.ay) > 22)) {
-        ctx.save(); ctx.strokeStyle = 'rgba(150,172,198,0.32)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(b.ax + (right ? 1 : -1) * (b.R0 + 3), b.ay); ctx.lineTo(nx, ny); ctx.stroke(); ctx.restore();
+      const wrong = !b.corner && nearerOther(b, x0, y0);
+      if (!b.corner && (Math.abs(nx - b.ax) > b.R0 + 22 || Math.abs(ny - b.ay) > 22 || wrong)) {
+        const d = Math.hypot(nx - b.ax, ny - b.ay) || 1, r = Math.min(b.R0 + 3, d);
+        ctx.save(); ctx.strokeStyle = wrong ? 'rgba(150,172,198,0.55)' : 'rgba(150,172,198,0.32)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(b.ax + (nx - b.ax) / d * r, b.ay + (ny - b.ay) / d * r); ctx.lineTo(nx, ny); ctx.stroke(); ctx.restore();
       }
+    };
+    b.shrink = () => {
+      while (b.cut < 3) {
+        b.cut++; const h0 = b.h; b.size();
+        if (b.h < h0) return true; // a step that sheds nothing (no telemetry, say) is skipped
+      }
+      return false;
     };
     blocks.set(ship.id, b);
     queue.push(b);
     return b;
+  }
+  // Whether a block placed at (x0, y0) has its name line nearer another ship's hull than its own (2 px or more
+  // nearer): the name is what a reader pairs with the nearest hull.
+  function nearerOther(b, x0, y0) {
+    const x1 = x0 + b.w, y1 = y0 + Math.min(b.h, LH);
+    const dist = (x, y) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1));
+    const own = dist(b.ax, b.ay);
+    for (const o of blocks.values()) if (o !== b && !o.corner && dist(o.ax, o.ay) + 2 < own) return true;
+    return false;
   }
   // One telemetry line for a ship (relative speed, what the drive is doing, PINNED, a countdown): it joins that
   // ship's block instead of being written wherever the thing it describes happens to sit.
@@ -801,7 +1186,8 @@
       ctx.stroke();
     }
     if (sel) {
-      const c = cam.toScreen(sel.pos), maxR = Math.hypot(cam.w, cam.h);
+      // centred where the selected hull is drawn: for a hostile, where our track puts her
+      const c = cam.toScreen(viewOf(sim, sel).pos), maxR = Math.hypot(cam.w, cam.h);
       const rstep = niceStep(1 / cam.zoom, 190);
       for (let k = 1; k <= 3; k++) {
         const rr = rstep * k * cam.zoom; if (rr > maxR) break;
@@ -853,15 +1239,31 @@
     if (sim.body) { try { const el = P.orbitalElements(sim.body.mu, ship.pos, ship.vel); if (el.bound && isFinite(el.a) && el.a > 0) horizon = Math.min(horizon, P.orbitalPeriod(sim.body.mu, el.a)); } catch (e) { /* keep 4 h */ } }
     return horizon;
   }
+  // At picture scale a line that starts at a hull (her coast, her plotted burn) starts at the hull's edge: the
+  // context is clipped to everything but her outline, the ellipse a beam ends on (see hullEdge). True when a clip
+  // was pushed; the caller restores it.
+  function clipOffHull(cam, ship) {
+    const L = ship.length * cam.zoom;
+    if (!(L >= 40)) return false;
+    const s = cam.toScreen(ship.pos), round = ship.role === 'station';
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, cam.w, cam.h);
+    ctx.ellipse(s.x, s.y, L / 2 + 3, round ? L / 2 + 3 : L * 0.14 + 3, round ? 0 : -ship.heading, 0, U.TAU);
+    ctx.clip('evenodd');
+    return true;
+  }
   function drawPath(sim, cam, ship, selected, long) {
     const pts = long ? sim.predictPath(ship, coastHorizon(sim, ship), 240) : sim.predictPath(ship, 1200, 60);
     if (pts.length < 2) return;
     const col = OD.Ships.FACTIONS[ship.faction].color;
+    const clipped = clipOffHull(cam, ship);
     ctx.beginPath();
-    if (!polyline(cam, pts, ship.pos)) return;
-    ctx.setLineDash(selected ? [6, 6] : [2, 6]);
-    ctx.strokeStyle = hexA(col, selected ? 0.5 : 0.2); ctx.lineWidth = selected ? 1.2 : 1;
-    ctx.stroke(); ctx.setLineDash([]);
+    if (polyline(cam, pts, ship.pos)) {
+      ctx.setLineDash(selected ? [6, 6] : [2, 6]);
+      ctx.strokeStyle = hexA(col, selected ? 0.5 : 0.2); ctx.lineWidth = selected ? 1.2 : 1;
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (clipped) ctx.restore();
   }
   function coastMark(sim, ship) {
     if (!sim.body) return null;
@@ -912,6 +1314,7 @@
     const pts = plan.pts;
     let i = 0;
     while (i < pts.length - 2 && pts[i + 1].t < elapsed) i++;
+    const clipped = clipOffHull(cam, ship);
     ctx.lineCap = 'round';
     while (i < pts.length - 1) {
       const ph = pts[i + 1].phase;
@@ -926,6 +1329,7 @@
       i = j - 1;
     }
     ctx.setLineDash([]); ctx.lineCap = 'butt';
+    if (clipped) ctx.restore();
     const mark = (ev, text, color, r) => {
       if (!ev) return;
       const s = cam.toScreen(ev);
@@ -977,14 +1381,43 @@
     }
   }
 
+  // A story marker. One with a radius is a circle: drawn to scale and dashed once it is MARK_R px or more, else a
+  // solid MARK_R px circle round the point, so "the red circle" reads as a circle at any zoom. Its label is a
+  // point's label and must show: beside the circle when it is on the clear map, else on the edge of the clear map
+  // with an arrow at it, as a threat off the map is marked. A ring to scale is captioned on its curve.
+  const MARK_R = 12;
   function drawMarkers(sim, cam) {
+    const safe = safeRect(cam);
     for (const m of sim.markers) {
       const s = cam.toScreen(m.pos);
       const col = m.color || '#b9c3d1';
-      ctx.strokeStyle = hexA(col, 0.85); ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(s.x, s.y - 7); ctx.lineTo(s.x + 7, s.y); ctx.lineTo(s.x, s.y + 7); ctx.lineTo(s.x - 7, s.y); ctx.closePath(); ctx.stroke();
-      if (m.radius) { ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(s.x, s.y, m.radius * cam.zoom, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]); }
-      if (m.label) label(m.label, s.x + 11, s.y - 9, { color: hexA(col, 0.95), prio: PRIO.ring });
+      const rpx = m.radius > 0 ? m.radius * cam.zoom : 0;
+      const point = !(m.radius > 0) || rpx < MARK_R;
+      ctx.save(); ctx.strokeStyle = hexA(col, 0.9);
+      if (m.radius > 0 && point) {
+        ctx.fillStyle = hexA(col, 0.14); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, MARK_R, 0, U.TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = hexA(col, 0.95); ctx.beginPath(); ctx.arc(s.x, s.y, 1.8, 0, U.TAU); ctx.fill();
+      } else {
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y - 7); ctx.lineTo(s.x + 7, s.y); ctx.lineTo(s.x, s.y + 7); ctx.lineTo(s.x - 7, s.y); ctx.closePath(); ctx.stroke();
+        if (m.radius > 0 && rpx < 2e5 && ringSeen(s, rpx, { x0: 0, y0: 0, x1: cam.w, y1: cam.h })) { ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(s.x, s.y, rpx, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]); }
+      }
+      ctx.restore();
+      if (!m.label) continue;
+      const color = hexA(col, 0.95), prio = PRIO.ring + 2;
+      if (!point) {
+        // to scale: the caption rides the ring where it crosses the clear map, else it sits at the centre as before
+        if (!ringCaption(cam, s, rpx, m.label, { color, font: F12, prio })) label(m.label, s.x + 11, s.y - 9, { color, prio });
+        continue;
+      }
+      const r = m.radius > 0 ? MARK_R : 7;
+      if (inSafe(s, safe)) {
+        const cands = [];
+        for (const dy of [-LH / 2, -LH / 2 - LH, -LH / 2 + LH]) { cands.push([r + 6, dy, 'left']); cands.push([-r - 6, dy, 'right']); }
+        cands.push([0, -r - 4 - LH, 'center'], [0, r + 4, 'center']);
+        label(m.label, s.x, s.y, { color, font: F12B, prio, keep: true, cands });
+      } else edgeLabel(cam, [{ text: m.label, font: F12B, color }], s.x, s.y, { color, prio, keep: true, slide: 4 });
     }
   }
   function drawFx(sim, cam) {
@@ -1007,9 +1440,10 @@
     shape.forEach(([x, y], i) => { const px = x * L, py = y * ws; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
     ctx.closePath();
   }
-  function drawShip(sim, cam, ship, sel, isTarget, hint, t) {
+  // t: the map's animation clock (holds while paused); tw: the real clock, for the tutorial's pulse
+  function drawShip(sim, cam, ship, sel, isTarget, hint, t, tw) {
     const v = viewOf(sim, ship);
-    if (v.ghost) { drawContact(sim, cam, ship, v, sel, isTarget, t); return; }
+    if (v.ghost) { drawContact(sim, cam, ship, v, sel, isTarget, t, hint); return; }
     const s = cam.toScreen(ship.pos);
     if (s.x < -300 || s.y < -300 || s.x > cam.w + 300 || s.y > cam.h + 300) return;
     const fac = OD.Ships.FACTIONS[ship.faction];
@@ -1023,7 +1457,9 @@
     const ang = -ship.heading; // screen rotation
     const load = ship.thermalLoad();
     const alive = !ship.destroyed;
-    const flick = reduced ? 1 : 1 + 0.06 * Math.sin(t * 37 + ship.pos.x * 1e-3) + 0.04 * Math.sin(t * 61 + ship.pos.y * 1e-3);
+    // the plume's shimmer runs on the sim's clock, so a paused fight holds a still plume
+    const st = sim && isFinite(sim.time) ? sim.time : t;
+    const flick = reduced ? 1 : 1 + 0.06 * Math.sin(st * 37 + ship.pos.x * 1e-3) + 0.04 * Math.sin(st * 61 + ship.pos.y * 1e-3);
 
     ctx.save();
     ctx.translate(s.x, s.y);
@@ -1043,7 +1479,7 @@
       ctx.globalAlpha = 0.5 + 0.5 * thr;
       ctx.save(); ctx.translate(-L / 2 + (iconMode ? L * 0.1 : L * 0.04), 0); ctx.scale(-1, 1); ctx.drawImage(cache.plume, 0, -pw / 2, plen, pw); ctx.restore();
       const gd = iconMode ? L * 0.6 : Math.max(5, L * 0.13);
-      ctx.globalAlpha = (0.6 + 0.4 * thr) * (reduced ? 1 : 0.9 + 0.1 * Math.sin(t * 53));
+      ctx.globalAlpha = (0.6 + 0.4 * thr) * (reduced ? 1 : 0.9 + 0.1 * Math.sin(st * 53));
       ctx.drawImage(cache.glow, -L / 2 - gd, -gd, gd * 2, gd * 2);
       ctx.restore();
     }
@@ -1178,6 +1614,19 @@
     ctx.globalAlpha = 1;
 
     const R0 = L * 0.9 + (iconMode ? 6 : 4);
+    // the hull as drawn, icon or picture: labels keep off it where they can (level 2 of the marks). The selected
+    // hull and the one a hint points at are hard marks, with their rings: a label that must show never covers them.
+    if (alive && s.x > -L && s.y > -L && s.x < cam.w + L && s.y < cam.h + L) {
+      const ux = Math.cos(ang), uy = Math.sin(ang), hard = !!(sel || hint);
+      if (station || shape === 'ring') obstacle(s.x, s.y, 1, 0, L * 0.5, L * 0.5, 2, ship.id, hard);
+      else if (iconMode) obstacle(s.x + ux * L * 0.1, s.y + uy * L * 0.1, ux, uy, L * 0.55, L * 0.4, 2, ship.id, hard);
+      else obstacle(s.x, s.y, ux, uy, L * 0.5, L * 0.25, 2, ship.id, hard);
+      // (the ring of a hull drawn as a picture lies well clear of her: only her hull is a mark then)
+      if (R0 <= RING_HULL_MAX) {
+        if (sel) ringObstacle(s.x, s.y, R0 + 5, 3, ship.id);
+        if (hint) ringObstacle(s.x, s.y, R0 + 16, 6, ship.id);
+      }
+    }
     // disabled: hazard dashes; captured: green dashes
     if (ship.disabled && !ship.destroyed) {
       ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
@@ -1202,7 +1651,7 @@
     }
     // tutorial hint: pulsing ring
     if (hint) {
-      const pulse = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t * 4);
+      const pulse = reduced ? 0.5 : 0.5 + 0.5 * Math.sin((tw != null ? tw : t) * 4);
       ctx.strokeStyle = hexA(COLORS.accent, 0.95 - 0.55 * pulse); ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(0, 0, R0 + 12 + 8 * pulse, 0, U.TAU); ctx.stroke();
       ctx.strokeStyle = hexA(COLORS.accent, 0.5); ctx.lineWidth = 1;
@@ -1240,8 +1689,9 @@
         }
       }
       if (sel || cam.zoom > 3e-5) b.bars = [[ship.deltaV() / ship.deltaVFull(), COLORS.blue], [1 - load, load > 0.85 ? COLORS.crit : load > 0.5 ? COLORS.warn : COLORS.good], [ship.hull, ship.hull < 0.35 ? COLORS.crit : COLORS.ink]];
-      b.prio = PRIO.name + (sel ? 6 : isTarget ? 4 : ship.faction === sim.playerFaction ? 2 : 0);
-      b.keep = !!sel;
+      // the hull a hint points at always keeps her name, and places it first
+      b.prio = hint ? PRIO.hint : PRIO.name + (sel ? 6 : isTarget ? 4 : ship.faction === sim.playerFaction ? 2 : 0);
+      b.keep = !!(sel || hint);
     }
   }
 
@@ -1261,7 +1711,27 @@
     const ang = Math.atan2(b.y - a.y, b.x - a.x);
     ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - 7 * Math.cos(ang - 0.4), b.y - 7 * Math.sin(ang - 0.4)); ctx.lineTo(b.x - 7 * Math.cos(ang + 0.4), b.y - 7 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
   }
+  // The ship of ours a hostile's block measures from: the selected one of ours, else the first.
+  function lookout(sim) {
+    const own = sim.playerShips().filter((x) => x.role !== 'station');
+    return own.find((x) => x.id === (OD.UI && OD.UI.selected)) || own[0] || null;
+  }
+  // Another side's hull: one arrow, her velocity relative to the ship of ours her block measures from, read off
+  // the track's own estimate and drawn from where we draw her. A '?' is a bearing and a rough range and gets
+  // none. Her target and where her drive wants to push are her orders, which our sensors do not read.
+  function drawTheirVector(sim, cam, ship) {
+    const v = viewOf(sim, ship);
+    if (ship.destroyed || (v.ghost && (v.q < TQ() || !v.classKnown))) return;
+    const from = lookout(sim);
+    if (!from || from === ship || !v.vel) return;
+    const u = U.sub(v.vel, from.vel), m = U.len(u);
+    if (!(m > 0.5)) return;
+    const s = cam.toScreen(v.pos), px = U.clamp(m * 0.02 + 24, 24, 130), d = U.norm(u);
+    arrow(s, { x: s.x + d.x * px, y: s.y - d.y * px }, hexA(COLORS.blue, 0.9), 1.4);
+    tele(sim, cam, ship, 'rel ' + U.fmt.speed(m) + ' to ' + from.name, COLORS.blue);
+  }
   function drawVectors(sim, cam, ship) {
+    if (ship.faction !== sim.playerFaction) { drawTheirVector(sim, cam, ship); return; }
     const s = cam.toScreen(ship.pos);
     const target = ship.target ? sim.byId(ship.target) : (ship.order && ship.order.target ? sim.byId(ship.order.target) : null);
     if (target && !target.destroyed) {
@@ -1307,13 +1777,30 @@
     label('turning' + (secs != null && isFinite(secs) ? ' · ' + U.fmt.time(secs) : ''), lx, ly, { color: COLORS.accent, align: Math.cos(a1) >= 0 ? 'left' : 'right', prio: PRIO.tele + 2 });
   }
 
+  // The scale bar and its number, drawn together at the foot of the clear map, the number over the bar. The label
+  // layer places the pair along the foot: in the middle first, then slid clear of a hull or a glyph that sits
+  // there. Only the number has a backing, so a hull under the bar still shows.
   function drawScaleBar(cam) {
+    const safe = safeRect(cam);
     const step = niceStep(1 / cam.zoom, 120);
-    const px = step * cam.zoom;
-    const x = cam.w / 2 - px / 2, y = cam.h - 26;
-    ctx.strokeStyle = 'rgba(215,224,234,0.65)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + px, y); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4); ctx.moveTo(x + px, y - 4); ctx.lineTo(x + px, y + 4); ctx.stroke();
-    label(U.fmt.dist(step), cam.w / 2, y - 10, { color: 'rgba(215,224,234,0.8)', align: 'center', prio: PRIO.scale, still: true, keep: true });
+    const px = step * cam.zoom, text = U.fmt.dist(step), tw = measure(text, F12) + 2;
+    const w = Math.max(px, tw) + 2, h = LH + 8;
+    // a clear map too short or too narrow to hold the bar and its number gets no scale bar
+    if (safe.y1 - safe.y0 < h || safe.x1 - safe.x0 < w) return;
+    const mx = (safe.x0 + safe.x1) / 2, ay = safe.y1 - h;
+    const cands = [];
+    const stepX = Math.max(40, w / 3);
+    for (const k of [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6]) cands.push([k * stepX - w / 2, 0, 'left']);
+    queue.push({
+      prio: PRIO.scale, ax: mx, ay, w, h, cands, keep: true, stay: true, bg: false, optional: true,
+      draw: (x0, y0) => {
+        const cx = x0 + w / 2, by = Math.round(y0 + h - 4) + 0.5, a = cx - px / 2, b = cx + px / 2;
+        ctx.strokeStyle = 'rgba(215,224,234,0.65)'; ctx.lineWidth = 1; ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(a, by); ctx.lineTo(b, by); ctx.moveTo(a, by - 4); ctx.lineTo(a, by + 3); ctx.moveTo(b, by - 4); ctx.lineTo(b, by + 3); ctx.stroke();
+        backing({ x0: cx - tw / 2, y0, x1: cx + tw / 2, y1: y0 + LH });
+        paint(text, cx, y0 + LH / 2, { color: 'rgba(215,224,234,0.8)', align: 'center' });
+      },
+    });
   }
 
   // ---- v8: reach rings, the burn-through ladder and the threat display. Every number comes from OD.Engagement
@@ -1345,11 +1832,16 @@
   // target. One family, one dash; the colour says whose reach it is. Drawn under the ships so they read as chart
   // marks, and a ring whose curve never crosses the free rectangle is not drawn at all.
   function drawReach(sim, cam, sel) {
-    const target = sel.target ? sim.byId(sel.target) : null;
+    // Another side's hull: her rings sit where we draw her, and nothing about her chosen target is drawn (that
+    // is her orders, which our sensors do not read). Her reach comes from her class, so a bare contact whose
+    // class we do not know draws no reach at all.
+    const ours = sel.faction === sim.playerFaction, v = viewOf(sim, sel);
+    if (!ours && v.ghost && (v.q < TQ() || !v.classKnown)) return;
+    const target = ours && sel.target ? sim.byId(sel.target) : null;
     const r = engReach(sim, sel, target && !target.destroyed ? target : null);
     if (!r) return;
     const maxR = Math.hypot(cam.w, cam.h);
-    const c = cam.toScreen(sel.pos);
+    const c = cam.toScreen(v.pos);
     const safe = safeRect(cam);
     const one = (centre, metres, color, text) => {
       if (!(metres > 0)) return;
@@ -1358,6 +1850,12 @@
       ring(centre, rpx, color, RING.reach);
       ringCaption(cam, centre, rpx, text, { color });
     };
+    // the colour says whose reach it is, as the map key has it: ours teal and blue, theirs red
+    if (!ours) {
+      one(c, r.pd, hexA(COLORS.crit, 0.6), 'their point defence · ' + U.fmt.dist(r.pd));
+      one(c, r.launch, hexA(COLORS.crit, 0.45), 'their interceptor reach · ' + U.fmt.dist(r.launch));
+      return;
+    }
     one(c, r.pd, hexA(COLORS.accent, 0.75), 'point defence · ' + U.fmt.dist(r.pd));
     one(c, r.launch, hexA(COLORS.blue, 0.7), 'interceptor reach · ' + U.fmt.dist(r.launch));
     const hostile = target && !target.destroyed && (typeof sim.isHostile === 'function' ? sim.isHostile(target, sel) : target.faction !== sel.faction);
@@ -1445,8 +1943,10 @@
     }
     const groups = Array.from(byKey.values());
     const soonest = {};
+    const safe = safeRect(cam);
     for (const g of groups) {
-      const on = g.x > -10 && g.x < cam.w + 10 && g.y > -10 && g.y < cam.h + 10;
+      // on the map means on the part the HUD leaves clear: a salvo under a panel gets an edge marker too
+      const on = g.x > safe.x0 - 4 && g.x < safe.x1 + 4 && g.y > safe.y0 - 4 && g.y < safe.y1 + 4;
       const color = g.atOurs ? COLORS.crit : hexA(COLORS.blue, 0.85);
       const word = g.kind === 'slug' ? 'slug' : 'interceptor';
       let text;
@@ -1459,15 +1959,9 @@
         for (const dy of [-9, 9, -24, 24, -39, 39, -54, 54]) { cands.push([8, dy - LH / 2, 'left']); cands.push([-8, dy - LH / 2, 'right']); }
         label(text, g.x, g.y, { color, font: g.atOurs ? F12B : F12, prio: PRIO.threat + (g.atOurs ? 2 : 0), cands });
       } else if (g.atOurs) {
-        // edge marker toward the threat, from its target's position (or the screen centre)
-        const tgt = sim.byId(g.targetId);
-        const from = tgt ? cam.toScreen(tgt.pos) : { x: cam.w / 2, y: cam.h / 2 };
-        const ang = Math.atan2(g.y - from.y, g.x - from.x);
-        const pad = 26;
-        const ex = U.clamp(g.x, pad, cam.w - pad), ey = U.clamp(g.y, pad, cam.h - pad);
-        ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang); ctx.fillStyle = color;
-        ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-5, -6); ctx.lineTo(-5, 6); ctx.closePath(); ctx.fill(); ctx.restore();
-        label(text, ex + (Math.cos(ang) > 0 ? -14 : 14), ey + (Math.sin(ang) > 0 ? -12 : 12), { color, align: Math.cos(ang) > 0 ? 'right' : 'left', font: F12B, prio: PRIO.threat + 3, keep: true });
+        // an edge marker on the edge of the clear map (never under a panel), its arrow pointing at the salvo; it
+        // must show, so the layout moves it clear of whatever is already placed there, a corner block included
+        edgeLabel(cam, [{ text, font: F12B, color }], g.x, g.y, { color, prio: PRIO.threat + 3, keep: true, fill: true });
       }
       if (g.atOurs && isFinite(g.eta) && (g.kind !== 'slug' || g.willHit)) {
         const cur = soonest[g.targetId];
@@ -1530,35 +2024,98 @@
           if (isFinite(tr.bearingErr)) v.bearingErr = tr.bearingErr;
           if (isFinite(tr.rangeErr)) v.rangeErr = tr.rangeErr;
           if (isFinite(tr.los)) v.los = tr.los;
+          // the range from the ear that holds her: the model's error across the bearing is bearingErr × this
+          if (isFinite(tr.range) && tr.range > 0) v.earRange = tr.range;
         }
       } catch (e) { Render.lastError = e; }
     }
     views.set(ship.id, v);
     return v;
   }
-  // A hostile the sensors have not resolved: a mark at the ghost position inside its uncertainty ring, with what
-  // is known about it. A bare contact is a '?' diamond with a bearing and a rough range; a track shows the class.
-  // The uncertainty on a track: a soft filled patch and never a stroked ring, so it cannot be mistaken for a reach
-  // ring drawn around the same point. When the sensor model gives bearingErr, rangeErr and the line-of-sight angle
-  // it is a sliver elongated along that line (range · bearingErr across it); otherwise it falls back to a disc.
-  function drawUncertainty(cam, v, col, range) {
+  // A hostile the sensors have not resolved: a mark at the ghost position on its error bar, with what is known
+  // about it. A bare contact is a '?' diamond with a bearing and a rough range; a track shows the class.
+  // The uncertainty on a contact or a track, drawn as an error bar: flat marks with hard ends, never a soft glow
+  // (a long gradient read as a searchlight coming off the contact) and never a stroked ring (that is a reach).
+  // With the sensor model's split errors she is somewhere on a stretch of the bearing: a thin line along the line
+  // of sight from (range − rangeErr) to (range + rangeErr), a tick across each end as long as the error across the
+  // bearing (bearingErr × the ear's range, the model's own box), and a faint strip that wide between the ticks.
+  // Without the split it is a flat hatched disc of posErr. An error smaller than the glyph draws nothing: the '?'
+  // diamond or the hull mark already covers it.
+  const GLYPH = 10; // px: the '?' diamond and the track's hull mark fit inside this radius
+  const hatches = new Map(); // colour → a repeating diagonal hatch for the disc fallback
+  function hatchFor(col) {
+    let p = hatches.get(col);
+    if (p) return p;
+    const S = 8, c = mk(S, S), g = c.getContext('2d');
+    g.strokeStyle = hexA(col, 0.3); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(-1, S + 1); g.lineTo(S + 1, -1); g.moveTo(-1, 1); g.lineTo(1, -1); g.moveTo(S - 1, S + 1); g.lineTo(S + 1, S - 1); g.stroke();
+    p = ctx.createPattern(c, 'repeat');
+    hatches.set(col, p);
+    return p;
+  }
+  // A long bar keeps a solid line only this far past the glyph; beyond it the line is spaced dashes that fade in
+  // three steps toward the end ticks. A long solid line from a contact toward our ships read as her track.
+  const BAR_SOLID = 26;
+  function drawUncertainty(cam, v, col, range, s, id) {
     const diag = Math.hypot(cam.w, cam.h);
-    let a = U.clamp((v.posErr || 0) * cam.zoom, 10, diag), b = a, rot = 0;
-    const aniso = isFinite(v.bearingErr) && isFinite(v.rangeErr) && isFinite(v.los) && range > 0;
-    if (aniso) {
-      a = U.clamp(v.rangeErr * cam.zoom, 5, diag);
-      b = U.clamp(range * v.bearingErr * cam.zoom, 5, diag);
-      rot = -v.los; // world angle to screen angle
-    }
+    const R = v.earRange > 0 ? v.earRange : range;
+    const aniso = isFinite(v.bearingErr) && isFinite(v.rangeErr) && isFinite(v.los) && R > 0;
     ctx.save();
-    if (rot) ctx.rotate(rot);
-    ctx.scale(Math.max(a, 0.01), Math.max(b, 0.01));
-    const rg = ctx.createRadialGradient(0, 0, 0.16, 0, 0, 1);
-    rg.addColorStop(0, hexA(col, 0.22)); rg.addColorStop(0.65, hexA(col, 0.13)); rg.addColorStop(1, hexA(col, 0));
-    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, 1, 0, U.TAU); ctx.fill();
+    // the mark stays on the clear map: a bar never runs on under the top bar, the banner or a panel
+    if (s) { const sr = safeRect(cam); ctx.beginPath(); ctx.rect(sr.x0 - 6 - s.x, sr.y0 - 6 - s.y, sr.x1 - sr.x0 + 12, sr.y1 - sr.y0 + 12); ctx.clip(); }
+    if (aniso) {
+      const A = Math.min(v.rangeErr * cam.zoom, diag);          // half the stretch along the bearing, px
+      const B = Math.min(v.bearingErr * R * cam.zoom, diag);    // half the error across it, px
+      if (A < GLYPH && B < GLYPH) { ctx.restore(); return; }
+      ctx.rotate(-v.los); // world angle to screen angle: +x now runs away from the ear along the line of sight
+      // the strip, as wide as the bearing error; under 3 px it would only thicken the line into a tube
+      const near = Math.min(A, GLYPH + BAR_SOLID);
+      if (B >= 3) {
+        ctx.fillStyle = hexA(col, 0.07); ctx.fillRect(-near, -B, 2 * near, 2 * B);
+        for (let i = 0; i < 3 && A > near; i++) {
+          const a0 = near + ((A - near) * i) / 3, a1 = near + ((A - near) * (i + 1)) / 3;
+          ctx.fillStyle = hexA(col, [0.045, 0.025, 0.01][i]);
+          ctx.fillRect(a0, -B, a1 - a0, 2 * B); ctx.fillRect(-a1, -B, a1 - a0, 2 * B);
+        }
+      }
+      ctx.lineCap = 'butt';
+      if (A > GLYPH + 2) {
+        // the line, broken where the glyph sits: solid next to it, then dashes that fade toward the ends
+        ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-near, 0); ctx.lineTo(-GLYPH, 0); ctx.moveTo(GLYPH, 0); ctx.lineTo(near, 0); ctx.stroke();
+        if (A > near) {
+          ctx.setLineDash([4, 3]);
+          // close-set dashes, and a fade that stops at 0.35, so a long rod still reads all the way out to its end ticks
+          for (let i = 0; i < 3; i++) {
+            const a0 = near + ((A - near) * i) / 3, a1 = near + ((A - near) * (i + 1)) / 3;
+            ctx.strokeStyle = hexA(col, [0.46, 0.4, 0.35][i]);
+            ctx.beginPath(); ctx.moveTo(a0, 0); ctx.lineTo(a1, 0); ctx.moveTo(-a0, 0); ctx.lineTo(-a1, 0); ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+        // the ticks: the near and far ends of the range error, as long as the bearing error is wide (4 px at least)
+        const k = Math.max(B, 4);
+        ctx.strokeStyle = hexA(col, 0.8); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-A, -k); ctx.lineTo(-A, k); ctx.moveTo(A, -k); ctx.lineTo(A, k); ctx.stroke();
+        // what the label layer keeps clear: both ticks, and the line between them where it can
+        if (s) {
+          const ux = Math.cos(v.los), uy = -Math.sin(v.los);
+          obstacle(s.x, s.y, ux, uy, A, 2, 1, id);
+          obstacle(s.x + ux * A, s.y + uy * A, ux, uy, 2, k + 1, 0, id);
+          obstacle(s.x - ux * A, s.y - uy * A, ux, uy, 2, k + 1, 0, id);
+        }
+      }
+    } else {
+      const r = Math.min((v.posErr || 0) * cam.zoom, diag);
+      if (r >= GLYPH) {
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, U.TAU);
+        ctx.fillStyle = hexA(col, 0.06); ctx.fill();
+        ctx.fillStyle = hatchFor(col); ctx.fill();
+      }
+    }
     ctx.restore();
   }
-  function drawContact(sim, cam, ship, v, isSel, isTarget, t) {
+  function drawContact(sim, cam, ship, v, isSel, isTarget, t, hint) {
     const s = cam.toScreen(v.pos);
     if (s.x < -300 || s.y < -300 || s.x > cam.w + 300 || s.y > cam.h + 300) return;
     const fac = OD.Ships.FACTIONS[ship.faction];
@@ -1566,11 +2123,10 @@
     // an unidentified contact is not amber: amber is the ISA's colour and says who a ship belongs to
     const col = contact ? COLORS.unknown : fac.color;
     // what we know, and who is looking: the selected ship of ours, else the first
-    const own = sim.playerShips().filter((x) => x.role !== 'station');
-    const from = own.find((x) => x.id === (OD.UI && OD.UI.selected)) || own[0] || null;
+    const from = lookout(sim);
     const range = from ? U.dist(v.pos, from.pos) : 0;
     ctx.save(); ctx.translate(s.x, s.y);
-    drawUncertainty(cam, v, col, range);
+    drawUncertainty(cam, v, col, range, s, ship.id);
     ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
     if (contact) {
       ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(8, 0); ctx.lineTo(0, 8); ctx.lineTo(-8, 0); ctx.closePath(); ctx.stroke();
@@ -1583,6 +2139,9 @@
       ctx.restore();
     }
     const R0 = 12;
+    // the glyph, with its selection ring or target brackets, is a mark no label covers
+    const gr = isTarget ? R0 + 9 : isSel ? R0 + 5 : GLYPH;
+    obstacle(s.x, s.y, 1, 0, gr, gr, 0, ship.id, !!(isSel || hint));
     if (isSel) {
       ctx.strokeStyle = COLORS.select; ctx.lineWidth = RING.select.width; ctx.setLineDash(RING.select.dash);
       ctx.beginPath(); ctx.arc(0, 0, R0 + 5, 0, U.TAU); ctx.stroke();
@@ -1602,17 +2161,23 @@
     b.head = contact
       ? [{ text: 'contact', font: F13B, color: col }, { text: from ? 'bearing ' + U.fmt.deg(U.angleOf(U.sub(v.pos, from.pos))) + ' · ~' + km(range) : 'class unknown', color: COLORS.dim }]
       : [{ text: ship.name, font: F13B, color: hexA(col, 0.85) }, { text: 'track · ' + OD.Ships.CLASSES[ship.cls].role + (from ? ' · ~' + km(range) : '') + ' ±' + km(v.posErr), color: COLORS.dim }];
-    b.prio = PRIO.name + (isSel ? 6 : isTarget ? 4 : 0);
-    b.keep = !!isSel;
+    b.prio = hint ? PRIO.hint : PRIO.name + (isSel ? 6 : isTarget ? 4 : 0);
+    b.keep = !!(isSel || hint);
   }
   // Being seen: around the selected ship, the range from which the best hostile sensor gets a solution on it with
   // its signature right now; a PINNED tag when a hostile already holds one; a slow sweep on an active sensor.
   function drawSignature(sim, cam, sel, t) {
     const S = OD.Sensors;
     if (!S || typeof S.seenFrom !== 'function') return;
+    // a bare contact (below track quality, or her class unknown) gets no ring, as she gets no reach rings: her
+    // position error is larger than the ring would be
+    const sv = viewOf(sim, sel);
+    if (sel.faction !== sim.playerFaction && sv.ghost && (sv.q < TQ() || !sv.classKnown)) return;
     let sf = null;
     try { sf = S.seenFrom(sim, sel); } catch (e) { Render.lastError = e; return; }
-    const c = cam.toScreen(sel.pos);
+    // centred where she is drawn; on another side's hull the sensors that read her are ours
+    const c = cam.toScreen(sv.pos);
+    const whom = sel.faction === sim.playerFaction ? 'us' : 'her';
     const safe = safeRect(cam);
     const maxR = Math.hypot(cam.w, cam.h);
     // A hostile that carries a solution forward by dead reckoning can hold us from beyond the range our
@@ -1624,13 +2189,14 @@
       const rpx = showR * cam.zoom;
       const text = heldR > (sf.solution || 0)
         ? 'held as a solution from ' + km(heldR) + (sf.heldBy ? ' · by ' + sf.heldBy : '') + (sf.word ? ' · ' + sf.word : '')
-        : 'a solution on us from ' + km(sf.solution) + (sf.by ? ' · by ' + sf.by : '') + (sf.word ? ' · ' + sf.word : '');
+        : 'a solution on ' + whom + ' from ' + km(sf.solution) + (sf.by ? ' · by ' + sf.by : '') + (sf.word ? ' · ' + sf.word : '');
       if (rpx >= 9 && ringSeen(c, rpx, safe)) {
         ring(c, rpx, hexA(COLORS.blue, 0.55), RING.signature);
         ringCaption(cam, c, rpx, text, { color: hexA(COLORS.blue, 0.9), font: F12 });
       } else if (rpx > 9) {
-        // the ring is off every edge: the line joins the ship's own block instead
-        tele(sim, cam, sel, (heldR > (sf.solution || 0) ? 'held from ' : 'seen from ') + km(showR) + ' · past the map edge', hexA(COLORS.blue, 0.85));
+        // the ring is off every edge: the line joins the ship's own block instead, worded as the ring's caption is
+        // (a solution, not a sighting: a track held from farther out is not contradicted by it)
+        tele(sim, cam, sel, (heldR > (sf.solution || 0) ? 'held as a solution from ' : 'a solution from ') + km(showR), hexA(COLORS.blue, 0.85));
       }
     }
     // pinned: a hostile holds a solution on us (seenFrom's `held` when the module reports it, else the live track)
@@ -1642,7 +2208,7 @@
     if (pinnedBy) {
       let sig = null; try { sig = S.signature(sel); } catch (e) { sig = null; }
       const blink = reduced ? 1 : 0.7 + 0.3 * Math.sin(t * 5);
-      tele(sim, cam, sel, (typeof pinnedBy === 'string' ? pinnedBy + ' has a solution on us' : 'a solution on us') + (sig && sig.word ? ' · ' + sig.word : ''), hexA(COLORS.crit, blink), F12B);
+      tele(sim, cam, sel, (typeof pinnedBy === 'string' ? pinnedBy + ' has a solution on ' + whom : 'a solution on ' + whom) + (sig && sig.word ? ' · ' + sig.word : ''), hexA(COLORS.crit, blink), F12B);
     }
     // active sensor: a slow sweep out to its reach
     if (sel.activeSensor && sel.activeRange > 0) {
@@ -1664,25 +2230,55 @@
     }
   }
 
+  // The clock the map's own motion runs on (target brackets turning, the incoming ring's pulse, the PINNED blink,
+  // the active sensor's sweep): real seconds that pass only while the sim clock moves, so a paused fight holds
+  // still, and at any warp they turn at one speed. The tutorial's pulse on a hull runs on the real clock: it asks
+  // for a tap, and the game may be paused while it does.
+  const anim = { t: 0, sim: null, simT: null, wall: null };
+  function animClock(sim, wall) {
+    if (sim && sim === anim.sim && anim.simT != null && sim.time !== anim.simT && anim.wall != null) anim.t += U.clamp(wall - anim.wall, 0, 0.1);
+    anim.sim = sim; anim.simT = sim ? sim.time : null; anim.wall = wall;
+    return anim.t;
+  }
+  // The hulls the open decision card names: the one it is about (the decision's target) and the one its
+  // recommended key names ('On to ISV Ardent'). Read only.
+  function cardHulls(sim) {
+    const D = OD.Decisions;
+    if (!D || typeof D.current !== 'function') return [];
+    let d = null;
+    try { d = D.current(sim); } catch (e) { d = null; }
+    if (!d) return [];
+    const out = d.targetId != null ? [d.targetId] : [];
+    const rec = (d.options || []).find((o) => o.recommended);
+    if (rec && rec.label) {
+      let best = null;
+      for (const s of sim.ships) if (!s.destroyed && s.name && rec.label.indexOf(s.name) >= 0 && (!best || s.name.length > best.name.length)) best = s;
+      if (best) out.push(best.id);
+    }
+    return out;
+  }
   function draw(sim, cam, ui) {
     if (!ctx) return;
     frame++;
     const sz = Render._size; cam.w = sz.w; cam.h = sz.h; cam.dpr = sz.dpr;
     ctx.setTransform(sz.dpr, 0, 0, sz.dpr, 0, 0);
-    const t = performance.now() / 1000;
-    queue = []; blocks.clear();
+    const tw = performance.now() / 1000, t = animClock(sim, tw);
+    queue = []; blocks.clear(); obstacles = [];
     // Follow puts the ship in the middle of what the HUD and any open band leave clear, not of the canvas.
     if (cam.follow) {
       const f = sim && sim.byId(cam.follow);
       if (f) {
-        const ins = cam.inset || { l: 0, r: 0, t: 0, b: 0 };
-        const cw = cam.w - (ins.l || 0) - (ins.r || 0), ch = cam.h - (ins.t || 0) - (ins.b || 0);
+        // (the clear map less a comms banner across it, as safeRect draws it, 8 px in from every edge)
+        const sr = safeRect(cam);
+        const cw = sr.x1 - sr.x0 + 16, ch = sr.y1 - sr.y0 + 16;
         // The follow point stays inside whatever is free, however little (a phone with the board and a hint open
         // leaves a strip): only a strip under 60 px falls back to the canvas centre.
-        const fx = cw > 60 ? (ins.l || 0) + cw / 2 : cam.w / 2;
-        const fy = ch > 60 ? (ins.t || 0) + ch / 2 : cam.h / 2;
-        cam.x = f.pos.x - (fx - cam.w / 2) / cam.zoom;
-        cam.y = f.pos.y + (fy - cam.h / 2) / cam.zoom;
+        const fx = cw > 60 ? (sr.x0 + sr.x1) / 2 : cam.w / 2;
+        const fy = ch > 60 ? (sr.y0 + sr.y1) / 2 : cam.h / 2;
+        // a hostile is followed where we draw her: where our track puts her, not where she is
+        const fp = viewOf(sim, f).pos;
+        cam.x = fp.x - (fx - cam.w / 2) / cam.zoom;
+        cam.y = fp.y + (fy - cam.h / 2) / cam.zoom;
       }
     }
 
@@ -1700,17 +2296,38 @@
       drawPath(sim, cam, ship, sel === ship, ship === sel || danger);
       if (sim.body && (ship === sel || danger)) drawCoastMark(sim, cam, ship);
     }
-    if (sel && !sel.destroyed) { drawPlan(sim, cam, sel); drawOrderRing(sim, cam, sel); }
+    // the plotted path and order ring are our own orders: a hostile's orders are not something our sensors read
+    if (sel && !sel.destroyed && sel.faction === sim.playerFaction) { drawPlan(sim, cam, sel); drawOrderRing(sim, cam, sel); }
     drawMarkers(sim, cam);
     drawFx(sim, cam);
-    const targetId = sel ? sel.target : null;
+    // her chosen target, her turn and her burn-through ladder are orders as well: brackets, arcs and ticks for them
+    // are drawn for our own selection only
+    const ours = !!sel && sel.faction === sim.playerFaction;
+    const targetId = ours ? sel.target : null;
     let hintId = null;
     try { const m = OD.Guide && OD.Guide.mark; if (m && m.shipId && (m.until == null || sim.time < m.until)) hintId = m.shipId; } catch (e) { hintId = null; }
-    for (const ship of sim.ships) if (ship !== sel) drawShip(sim, cam, ship, false, ship.id === targetId, ship.id === hintId, t);
-    if (sel) drawShip(sim, cam, sel, true, sel.id === targetId, sel.id === hintId, t);
-    if (sel && !sel.destroyed) { drawVectors(sim, cam, sel); drawTurnArc(sim, cam, sel); }
+    for (const ship of sim.ships) if (ship !== sel) drawShip(sim, cam, ship, false, ship.id === targetId, ship.id === hintId, t, tw);
+    if (sel) drawShip(sim, cam, sel, true, sel.id === targetId, sel.id === hintId, t, tw);
+    // the selected hull and the hinted one keep a label even when they are drawn nowhere (far off the map): an
+    // edge line with an arrow at her (see drawLabels)
+    for (const k of [sel, hintId != null ? sim.byId(hintId) : null]) {
+      if (!k || k.destroyed) continue;
+      const b = blockOf(sim, cam, k);
+      if (!b.keep) { b.keep = true; b.prio = k.id === hintId ? PRIO.hint : PRIO.name + 6; }
+    }
+    // The selected ship's target and the hulls the open decision card names keep their names and place them
+    // first, as the hint's hull does: the card that says 'Close on ISV Tenacity' finds Tenacity's name beside her.
+    for (const id of [targetId].concat(cardHulls(sim))) {
+      const k = id != null ? sim.byId(id) : null;
+      if (!k || k.destroyed || k === sel) continue;
+      const b = blockOf(sim, cam, k);
+      b.keep = true; b.prio = Math.max(b.prio, PRIO.hint);
+    }
+    if (sel && !sel.destroyed) { drawVectors(sim, cam, sel); if (ours) drawTurnArc(sim, cam, sel); }
     if (OD.Engagement && OD.Engagement.render) { try { OD.Engagement.render(ctx, cam, sim); } catch (e) { Render.lastError = e; } }
-    if (sel && !sel.destroyed) { try { drawLadder(sim, cam, sel); } catch (e) { Render.lastError = e; } }
+    if (sel && !sel.destroyed && ours) { try { drawLadder(sim, cam, sel); } catch (e) { Render.lastError = e; } }
+    // the console's demo scene is scenery: no marker toward a body it does not show
+    if (!(OD.Bridge && OD.Bridge.active)) { try { drawBodyMarker(sim, cam, sel); } catch (e) { Render.lastError = e; } }
     try { drawThreats(sim, cam, sel, t); } catch (e) { Render.lastError = e; }
     drawVignette(cam);
     // under the console (menu, briefing, hangar) the demo scene is scenery: no chips, no plates, no scale bar

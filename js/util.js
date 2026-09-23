@@ -72,6 +72,8 @@
         if (a >= 1000) return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u2009');
         if (a < 0.01) return v.toExponential(2);
         let s = v.toPrecision(digits);
+        // 999.6 at three digits comes out as '1.00e+3' ('out to 1.00e+3 km' on a card): read it back as a number
+        if (s.includes('e')) { const r = Number(s); return Math.abs(r) >= 1000 ? U.fmt.num(r) : String(r); }
         if (s.includes('.')) s = s.replace(/\.?0+$/, '');
         return s;
       },

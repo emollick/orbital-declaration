@@ -23,19 +23,21 @@
     physics: { title: 'Physics panel', body: 'The numbers behind the selected ship, kept live: delta-v, transfer time and cost, heat, armour facing and orbit. P opens it.' },
     navigator: { title: 'Navigator', body: 'What the selected ship is doing now, and what it does next. The same look-ahead draws the plotted path on the map.' },
     plan: { title: 'Plotted path', body: 'Bright line: burning. Dashed: turning or coasting. Blue-grey: braking tail-first. The first ring is the flip, the second the arrival.' },
-    detail: { title: 'Essentials or Full', body: 'Essentials shows what you need to fly and fight. Full adds mass, speed, heading, orbit, the systems bars and the gunnery rows. D switches between them.' },
+    detail: { title: 'Essentials or Full', body: 'Essentials shows what you need to fly and fight. Full adds mass, speed, heading, altitude, the systems bars and the gunnery rows. D switches between them.' },
     tip: { title: 'Tip', body: 'A suggestion for what to do next. It clears once you have done it.' },
     next: { title: 'Next event', body: 'The next thing the selected ship will do: finish a turn, flip, start braking, arrive. Time warp drops to 1× just before it so you can watch.' },
     skip: { title: 'Skip ahead', body: 'Run time at 64× until 20 s before the next event, then drop back to 1×.' },
     stopping: { title: 'Stopping distance', body: 'How far the ship travels while the drive cancels the closing speed, at d = v² / 2a. More than the range means you overshoot.', formula: 'd = v² / (2·a)' },
     vitals: { title: 'Vitals', body: 'Delta-v left, the range to the target, and how fast that range is closing. These three decide most orders.' },
-    dv: (c) => ({ title: 'Delta-v remaining', body: 'The speed change the propellant aboard can still buy. Every burn spends it, and only a depot puts it back.', formula: c.ship ? 'Δv = vₑ · ln(m₀ / m₁)\n   = ' + U.fmt.speed(c.ship.exhaustVelocity) + ' · ln(' + U.fmt.mass(c.ship.mass()) + ' / ' + U.fmt.mass(c.ship.dryMass) + ')\n   = ' + U.fmt.dv(c.ship.deltaV()) : '' }),
+    dv: (c) => (c.ship && !hasDrive(c.ship)
+      ? { title: 'Delta-v remaining', body: 'She has no drive and no propellant. No burn can change her orbit.' }
+      : { title: 'Delta-v remaining', body: 'The speed change the propellant aboard can still buy. Every burn spends it, and only a depot puts it back.', formula: c.ship ? 'Δv = vₑ · ln(m₀ / m₁)\n   = ' + U.fmt.speed(c.ship.exhaustVelocity) + ' · ln(' + U.fmt.mass(c.ship.mass()) + ' / ' + U.fmt.mass(c.ship.dryMass) + ')\n   = ' + U.fmt.dv(c.ship.deltaV()) : '' }),
     dvgauge: (c) => ({ title: 'Delta-v budget', body: 'The bar is the delta-v left against a full load. The hatched part is what the current order will spend.', formula: c.plan && c.plan.active ? 'this order: ' + U.fmt.dv(c.plan.dv) + ' of ' + U.fmt.dv(c.ship.deltaV()) + (c.plan.feasible ? '' : '  (not enough)') : '' }),
     accel: (c) => ({ title: 'Acceleration', body: 'Thrust divided by current mass. It rises as propellant burns off, and falls when the drive is damaged or the heat sink is full. The g limit you set for the crew caps it as well.', formula: c.ship ? accelFormula(c.ship) : '' }),
     mass: { title: 'Mass', body: 'Current mass, with the propellant left in brackets. A corvette leaves port about 60 % propellant by mass.' },
     speed: { title: 'Speed', body: 'Speed relative to the body you are orbiting. A ship parked in orbit is still doing kilometres per second.' },
     heading: { title: 'Heading', body: 'Where the nose points. Thrust leaves through the tail, so the autopilot turns the ship before every burn. A corvette takes about 21 s to swing 180°, a cruiser longer.' },
-    orbit: { title: 'Orbit', body: 'The low and high points of the current coast above the surface. A low point below the surface means the coast ends on the ground.' },
+    orbit: { title: 'Altitude', body: 'Height above the surface at the low and high points of the current coast. A low point below the surface means the coast ends on the ground. On an escape path it is the height now.' },
     target: { title: 'Target', body: 'The ship your orders and readouts point at. Click a ship on the map or in the fleet list to set it.' },
     range: { title: 'Range', body: 'Straight-line distance to the target. Below a firing solution this is the estimate from our track, shown with its error.' },
     closing: { title: 'Closing speed', body: 'How fast the range is shrinking. Negative means the target is pulling away. Slugs and interceptors are aimed off this number. Beams are not.' },
@@ -137,6 +139,7 @@
   // The acceleration tooltip: F/m as the quotient it is, then the crew's cap on its own line, then what the
   // drive is actually giving when damage or a full sink has taken it below both.
   function accelFormula(ship) {
+    if (!hasDrive(ship)) return 'no drive: F = 0, so a = 0 at any mass';
     const m = ship.mass();
     const raw = m > 0 ? ship.thrust / m : 0;
     let f = 'a = F / m = ' + U.fmt.si(ship.thrust, 'N') + ' / ' + U.fmt.mass(m) + ' = ' + U.fmt.accel(raw);
@@ -158,6 +161,11 @@
     if (game && game.sim && ship.faction !== game.sim.playerFaction) return ship.throttle > 0.02 ? 'burning ' + ((ship.accel() * ship.throttle) / 9.80665).toFixed(1) + ' g' : 'coasting';
     return t + (ship.jink ? ' · jink' : '');
   }
+  // v15: a hull built without a drive (the station: thrust 0, no tanks) against one whose drive is out
+  function hasDrive(ship) { return !!ship && ship.thrust > 0; }
+  function armourAllRound(ship) { const a = ship && ship.armour; return !!a && a.nose === a.flank && a.flank === a.tail; }
+  // why a hull makes no thrust, as the end of a sentence ('the tanks are dry'); '' when she makes some
+  function noThrustWhy(ship) { const n = thrustWhy(ship).none; return n ? n.replace(/^no thrust(: )?/, '') || 'no thrust' : ''; }
   function facetSeen(ship, target) {
     const rel = Math.abs(U.angleDiff(U.angleOf(U.sub(target.pos, ship.pos)), ship.heading));
     return rel < Math.PI / 4 ? 'nose' : rel > (3 * Math.PI) / 4 ? 'tail' : 'flank';
@@ -178,6 +186,7 @@
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); act(ev); } });
       el.addEventListener('dblclick', () => { UI.select(el.dataset.ship); game.cam.follow = el.dataset.ship; });
     });
+    legendFit();
   }
   function updateFleet(sim) {
     $('fleetList').querySelectorAll('.fleet-row').forEach((el) => {
@@ -192,59 +201,73 @@
       el.querySelector('.order').textContent = fuzzy ? word + (word === 'track' ? ' · ' + orderLabel(s) : '') : orderLabel(s);
       const bars = el.querySelectorAll('.bar');
       const load = s.thermalLoad();
-      bars[0].firstChild.style.width = Math.round(U.clamp(s.deltaV() / s.deltaVFull(), 0, 1) * 100) + '%';
+      // a hull with no drive has no delta-v bar at all, rather than a full one
+      const full = s.deltaVFull();
+      bars[0].style.visibility = hasDrive(s) ? '' : 'hidden';
+      bars[0].firstChild.style.width = Math.round(U.clamp(full > 0 ? s.deltaV() / full : 0, 0, 1) * 100) + '%';
       bars[1].firstChild.style.width = Math.round((1 - load) * 100) + '%'; bars[1].className = 'bar heat ' + heatCls(load);
       bars[2].firstChild.style.width = Math.round(s.hull * 100) + '%'; bars[2].className = 'bar hull ' + (s.hull < 0.35 ? 'crit' : '');
     });
   }
 
   // ------------------------------------------------------------------ ship panel
-  function buildPanel(ship) {
+  function buildPanel(ship, pic) {
     const sim = game.sim;
     const own = ship.faction === sim.playerFaction && !ship.captured || (ship.captured && ship.faction === sim.playerFaction);
     const control = ship.faction === sim.playerFaction && !ship.disabled && ship.role !== 'station';
     const cls = OD.Ships.CLASSES[ship.cls];
     const hasEng = !!OD.Engagement;
-    panelHasEng = !!OD.Engagement + ':' + !!(OD.Damage && OD.Damage.report);
+    // v15 round 3: a hostile gets what our sensors give on her, the level the hull view uses. Below a solution that
+    // is her class as far as it is known, the track and the range with its error; at a solution her state as well.
+    // Her orders are never shown: no navigator line, no target, transfer, arrival or stopping distance.
+    if (pic === undefined) pic = hostilePic(sim, ship);
+    const blind = !!pic && pic.level !== 'full';
+    panelHasEng = panelKey(pic);
     // A scenario may narrow the controls it needs (chapter 1 teaches two orders); Full reveals the rest.
     const ctl = (sim.scenario && sim.scenario.controls) || {};
     const orderSet = ctl.orders || ['intercept', 'keeprange', 'matchv', 'hold', 'retreat', 'manual'];
     const adv = (ok) => (ok ? '' : ' data-adv');
     const anyHostile = sim.ships.some((s) => sim.isHostile(s, ship));
+    // v15: a hull with no drive (a station) has no delta-v, no transfer and no stopping distance: those rows are
+    // left out rather than printed as noughts and NaN. Armour the same on every facet reads 'all round'.
+    const noDrive = !hasDrive(ship), allRound = armourAllRound(ship);
     let h = '';
-    h += '<div class="head"><div><div class="name">' + esc(ship.name) + '</div><div class="cls">' + esc(cls.name) + '</div></div><span class="badge ' + ship.faction + '">' + esc(OD.Ships.FACTIONS[ship.faction].short) + '</span></div>';
-    h += '<div class="portrait-wrap"><canvas class="portrait" id="pPortrait" data-tip="hullview" title="Hull view (V)" role="button" tabindex="0" aria-label="Open the hull view of ' + esc(ship.name) + '"></canvas><div class="head-tools"><button class="sm" id="pFollow" data-tip="follow">Follow<kbd>F</kbd></button><button class="sm" id="pDetail" data-tip="detail" aria-pressed="false">Full<kbd>D</kbd></button></div></div>';
-    // Navigator: the plain-language line.
-    h += '<div class="section nav" data-v="nav" data-phase="coast"><div class="nav-head"><span data-tip="navigator">Navigator</span><span class="pill" data-v="ostate"></span></div><div class="nav-line" data-v="navtext"></div><div class="nav-sub" data-v="navsub"></div><div class="tipline" data-v="navtip" data-tip="tip" hidden></div></div>';
+    // her name is known (the list, the cards and the hints use it); what the track lacks is her class
+    const shownName = ship.name;
+    h += '<div class="head"><div><div class="name">' + esc(shownName) + '</div><div class="cls">' + esc(pic && !pic.classKnown ? 'Class unknown' : cls.name) + '</div></div><span class="badge ' + ship.faction + '">' + esc(OD.Ships.FACTIONS[ship.faction].short) + '</span></div>';
+    h += '<div class="portrait-wrap"><canvas class="portrait" id="pPortrait" data-tip="hullview" title="Hull view (V)" role="button" tabindex="0" aria-label="Open the hull view of ' + esc(shownName) + '"></canvas><div class="head-tools"><button class="sm" id="pFollow" data-tip="follow">Follow<kbd>F</kbd></button><button class="sm" id="pDetail" data-tip="detail" aria-pressed="false">Full<kbd>D</kbd></button></div></div>';
+    // Navigator: the plain-language line. For a hostile, our track on her in its place.
+    if (pic) h += '<div class="section nav" data-v="nav" data-phase="track"><div class="nav-head"><span data-tip="track">Our track</span><span class="pill" data-v="ostate"></span></div><div class="nav-line" data-v="navtext"></div><div class="nav-sub" data-v="navsub"></div></div>';
+    else h += '<div class="section nav" data-v="nav" data-phase="coast"><div class="nav-head"><span data-tip="navigator">Navigator</span><span class="pill" data-v="ostate"></span></div><div class="nav-line" data-v="navtext"></div><div class="nav-sub" data-v="navsub"></div><div class="tipline" data-v="navtip" data-tip="tip" hidden></div></div>';
     // Threats: hidden until something is inbound
-    h += '<div class="section threats" data-v="thsec" hidden><div class="th-head"><span data-tip="threats">Threats</span><span class="pill" data-v="thlevel"></span></div><div class="th-line" data-v="thtext"></div><div class="kv" data-v="throws" style="margin-top:4px"></div></div>';
-    // Vitals: the three numbers that matter most
-    h += '<div class="vitals" data-tip="vitals"><div><span class="k">Delta-v</span><span class="v" data-v="vdv"></span></div><div><span class="k">Range</span><span class="v" data-v="vrange"></span></div><div><span class="k">Closing</span><span class="v" data-v="vclose"></span></div></div>';
+    if (!blind) h += '<div class="section threats" data-v="thsec" hidden><div class="th-head"><span data-tip="threats">Threats</span><span class="pill" data-v="thlevel"></span></div><div class="th-line" data-v="thtext"></div><div class="kv" data-v="throws" style="margin-top:4px"></div></div>';
+    // Vitals: the three numbers that matter most (for a hostile held as a solution, range and closing from our ship)
+    if (!blind) h += '<div class="vitals" data-tip="vitals"><div><span class="k">Delta-v</span><span class="v" data-v="vdv"></span></div><div><span class="k">Range</span><span class="v" data-v="vrange"></span></div><div><span class="k">Closing</span><span class="v" data-v="vclose"></span></div></div>';
     // Signature: how loud we are, and the active sensor (v11; hidden until the sensor module is present)
-    h += '<div class="sigrow" data-v="sigrow" hidden><span class="k" data-tip="signature">Signature</span><span class="v" data-v="sig"></span>' + (control ? '<button class="sm" id="pActive" data-tip="active" aria-pressed="false">Active<kbd>S</kbd></button>' : '') + '</div>';
+    if (!blind) h += '<div class="sigrow" data-v="sigrow" hidden><span class="k" data-tip="signature">Signature</span><span class="v" data-v="sig"></span>' + (control ? '<button class="sm" id="pActive" data-tip="active" aria-pressed="false">Active<kbd>S</kbd></button>' : '') + '</div>';
     // Delta-v gauge
-    h += '<div class="section"><div class="gauge-row"><span class="k" data-tip="dv">Delta-v (fuel)</span><span class="v" data-v="dv"></span></div>' +
-      '<div class="gauge dv" data-tip="dvgauge"><i class="fill" data-v="dvfill"></i><i class="cost" data-v="dvcost"></i></div>' +
-      '<div class="gauge-foot"><span data-v="dvplan"></span><span data-v="dvfull" class="dim"></span></div>' +
+    if (!blind) h += '<div class="section"><div class="gauge-row"><span class="k" data-tip="dv">Delta-v (fuel)</span><span class="v" data-v="dv"></span></div>' +
+      (noDrive ? '' : '<div class="gauge dv" data-tip="dvgauge"><i class="fill" data-v="dvfill"></i><i class="cost" data-v="dvcost"></i></div>' +
+      '<div class="gauge-foot"><span data-v="dvplan"></span><span data-v="dvfull" class="dim"></span></div>') +
       '<div class="kv" data-adv>' +
       '<span class="k" data-tip="accel">Acceleration</span><span class="v" data-v="accel"></span>' +
       '<span class="k" data-tip="mass">Mass (propellant)</span><span class="v" data-v="mass"></span>' +
       '<span class="k" data-tip="speed">Speed</span><span class="v" data-v="speed"></span>' +
       '<span class="k" data-tip="heading">Heading</span><span class="v" data-v="heading"></span>' +
-      (sim.body ? '<span class="k" data-tip="orbit">Orbit</span><span class="v" data-v="orbit"></span>' : '') +
+      (sim.body ? '<span class="k" data-tip="orbit">Altitude</span><span class="v" data-v="orbit"></span>' : '') +
       '<span class="k" data-tip="signature" data-v="sigsrck" hidden>Signature by source</span><span class="v" data-v="sigsrc" hidden></span>' +
-      '<span class="k" data-tip="track" data-v="sensk" hidden>Our sensors</span><span class="v" data-v="sens" hidden></span>' +
+      '<span class="k" data-tip="track" data-v="sensk" hidden>' + (ship.faction === sim.playerFaction ? 'Our sensors' : 'Her sensors') + '</span><span class="v" data-v="sens" hidden></span>' +
       '</div></div>';
-    // Target
-    h += '<div class="section"><h4><span data-tip="target">Target</span><span class="pill" data-v="tstate"></span></h4><div class="kv">' +
+    // Target (a hostile's target is her order: never shown)
+    if (!pic) h += '<div class="section"><h4><span data-tip="target">Target</span><span class="pill" data-v="tstate"></span></h4><div class="kv">' +
       '<span class="k">Contact</span><span class="v" data-v="tname"></span>' +
       '<span class="k" data-tip="track" data-v="ttrackk" hidden>Track</span><span class="v" data-v="ttrack" hidden></span>' +
       '<span class="k" data-tip="solution_in" data-v="tsolk" hidden>Solution in</span><span class="v" data-v="tsol" hidden></span>' +
-      '<span class="k" data-tip="rendezvous">Transfer</span><span class="v" data-v="test"></span>' +
+      (noDrive ? '' : '<span class="k" data-tip="rendezvous">Transfer</span><span class="v" data-v="test"></span>' +
       '<span class="k" data-tip="arrive">Arrive</span><span class="v" data-v="tarr"></span>' +
-      '<span class="k" data-tip="stopping">Stop needs</span><span class="v" data-v="tstop"></span>' +
+      '<span class="k" data-tip="stopping">Stop needs</span><span class="v" data-v="tstop"></span>') +
       '</div><div class="facing-row" data-tip="facing"><span class="k">They see</span>' +
-      '<svg class="facing" viewBox="0 0 64 24" width="64" height="24" aria-hidden="true"><polygon data-f="tail" points="3,7 16,7 16,17 3,17"/><polygon data-f="flank" points="17,6 44,6 44,18 17,18"/><polygon data-f="nose" points="45,6 61,12 45,18"/></svg>' +
+      (allRound ? '' : '<svg class="facing" viewBox="0 0 64 24" width="64" height="24" aria-hidden="true"><polygon data-f="tail" points="3,7 16,7 16,17 3,17"/><polygon data-f="flank" points="17,6 44,6 44,18 17,18"/><polygon data-f="nose" points="45,6 61,12 45,18"/></svg>') +
       '<span class="v" data-v="tfacing"></span></div>' +
       '<div class="row" data-v="boardrow" hidden><label data-tip="boarding">Boarding</label><div class="bar" style="flex:1"><i data-v="boardbar" style="background:var(--good)"></i></div></div></div>';
     if (control) {
@@ -253,7 +276,7 @@
         '<button data-order="keeprange" data-tip="order_keeprange"' + adv(orderSet.includes('keeprange')) + '><span>Keep range<kbd>K</kbd></span><small data-v="pv_keeprange"></small></button>' +
         '<button data-order="matchv" data-tip="order_matchv"' + adv(orderSet.includes('matchv')) + '><span>Match speed<kbd>M</kbd></span><small data-v="pv_matchv"></small></button>' +
         '<button data-order="hold" data-tip="order_hold"' + adv(orderSet.includes('hold')) + '><span>Hold<kbd>H</kbd></span><small>coast, no burn</small></button>' +
-        '<button data-order="retreat" data-tip="order_retreat"' + adv(orderSet.includes('retreat')) + '><span>Retreat<kbd>R</kbd></span><small>full burn away</small></button>' +
+        '<button data-order="retreat" data-tip="order_retreat"' + adv(orderSet.includes('retreat')) + '><span>Retreat<kbd>R</kbd></span><small data-v="pv_retreat">full burn away</small></button>' +
         '<button data-order="manual" data-tip="order_manual"' + adv(orderSet.includes('manual')) + '><span>Manual</span><small>heading + throttle</small></button></div>' +
         '<div class="row"' + adv(orderSet.includes('keeprange')) + '><label data-tip="order_keeprange" for="pRange">Range km</label><input type="number" id="pRange" min="1" step="10" value="' + Math.round((ship.order.range || cls.doctrine.range || 200e3) / 1000) + '">' +
         '<select id="pVmax" data-tip="vmax" aria-label="Cruise cap"><option value="0">Fastest</option><option value="3000">Cap 3 km/s</option><option value="1500">Cap 1.5 km/s</option></select>' +
@@ -262,14 +285,15 @@
         '<div class="row" id="pManual2" hidden><label for="pThrottle">Throttle</label><input type="range" id="pThrottle" min="0" max="100" value="0"><span class="num" data-v="mthr" style="width:3em"></span></div>' +
         '</div>';
     }
-    h += '<div class="section"><h4><span data-tip="heat">Heat</span><span class="pill" data-v="hstate"></span></h4><div class="heatbar"><i data-v="heatbar"></i><b data-v="heatmark"></b></div><div class="kv">' +
+    if (!blind) h += '<div class="section"><h4><span data-tip="heat">Heat</span><span class="pill" data-v="hstate"></span></h4><div class="heatbar"><i data-v="heatbar"></i><b data-v="heatmark"></b></div><div class="kv">' +
       '<span class="k">Heat stored</span><span class="v" data-v="heat"></span>' +
       '<span class="k" data-tip="heatfc">Forecast</span><span class="v" data-v="heatfc"></span>' +
       '<span class="k" data-adv>Heat in / out</span><span class="v" data-adv data-v="heatio"></span>' +
       '<span class="k" data-tip="radiators">Radiators</span><span class="v" data-v="rad"></span></div>' +
       (own ? '<div class="btnrow" style="margin-top:6px"' + adv(anyHostile) + '><button class="sm" data-rad="1" data-tip="radiators">Extend</button><button class="sm" data-rad="0" data-tip="radiators">Stow</button><button class="sm" data-rad="auto" data-tip="rad_auto">Auto</button></div>' : '') +
       '</div>';
-    if (OD.Damage && OD.Damage.report) {
+    if (blind) { /* no damage report below a solution: the hull view shows none either */ }
+    else if (OD.Damage && OD.Damage.report) {
       h += '<div class="section" data-adv data-v="syssec"><h4><span data-tip="damage">Damage control</span><span class="pill" data-v="dmgstate"></span></h4>' +
         '<div class="crewline" data-v="crew" data-tip="crew"></div>' +
         (own ? '<div class="btnrow gmode" data-v="gmode" data-tip="gmode"><button class="sm" data-g="work">Work · 1.2 g</button><button class="sm" data-g="couches">Couches · 3 g</button><button class="sm" data-g="max">No limit</button></div><div class="gwords" data-v="gwords"></div>' : '') +
@@ -280,7 +304,7 @@
         '</div></div>';
     }
     if (hasEng && own) h += fcSection(anyHostile);
-    h += '<div class="section blurb" data-adv>' + esc(cls.blurb) + '</div>';
+    if (!blind) h += '<div class="section blurb" data-adv>' + esc(cls.blurb) + '</div>';
     const panel = $('shipPanel');
     panel.innerHTML = h;
     panel.dataset.detail = UI.detail;
@@ -373,6 +397,12 @@
     '.th-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:4px}',
     '.th-line{font-size:13.5px;font-weight:500;line-height:1.35}',
     '.th-line.alert{color:var(--crit)} .th-line.warn{color:var(--warn)}',
+    '.kv.rows{display:block}',
+    '.kv.rows .kvr{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0}',
+    '.kv.rows .kvr .v{min-width:0}',
+    '.kv.rows .kvr.long{display:block}',
+    '.kv.rows .kvr.long .v{display:block;text-align:left;padding:1px 0 1px 10px;border-left:1px solid var(--line)}',
+    '.nw{white-space:nowrap}',
     '.fc-row{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}',
     '.fc-row .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);min-width:40px;font-weight:600}',
     '.fc-row .seg{margin-right:0;flex-wrap:wrap}',
@@ -403,9 +433,9 @@
     '.dmg-row .dmg-party button{margin-left:auto;flex:0 0 auto;white-space:nowrap}',
     '#dmgNoFree{color:var(--dim);font-size:11.5px;margin:-2px 0 6px}',
     '.dmg-empty{font-size:12px;color:var(--dim)}',
-    '.sw.pd{border-top:2px dashed var(--accent)} .sw.reach{border-top:2px dashed var(--blue)}',
-    '.sw.inc{width:9px;height:9px;border:2px solid var(--crit);border-radius:50%;margin:0 6px}',
-    '.sw.ladder{height:7px;width:20px;border-top:0;border-left:2px solid var(--accent);border-right:2px solid var(--crit);margin-bottom:-4px}',
+    '#legend .sw.pd{border-top:2px dashed var(--accent)} #legend .sw.reach{border-top:2px dashed var(--blue)}',
+    '#legend .sw.inc{width:9px;height:9px;border:2px solid var(--crit);border-radius:50%;margin:0 6px}',
+    '#legend .sw.ladder{height:7px;width:20px;border-top:0;border-left:2px solid var(--accent);border-right:2px solid var(--crit);margin-bottom:-4px}',
   ].join('\n');
   const LEGEND_V8 = [
     ['pd', 'point defence reach · ours teal, theirs red'], ['reach', 'interceptor reach · ours blue'], ['inc', 'incoming · time to arrival'], ['ladder', 'burn-through ranges'],
@@ -424,11 +454,11 @@
   function actById(acts) { const m = {}; for (const a of acts) m[a.id] = a; return m; }
   function fcSection(anyHostile) {
     return '<div class="section" id="pEng"' + (anyHostile ? '' : ' data-adv') + '><h4><span data-tip="firecontrol">Fire control</span><button class="sm" id="pWF" data-tip="weaponsfree" aria-pressed="false">Weapons free<kbd>W</kbd></button></h4>' +
-      '<div class="kv" data-v="engrows"></div>' +
+      '<div class="kv rows" data-v="engrows"></div>' +
       '<div class="fc-row" data-v="fcmode" hidden><span class="lbl" data-tip="firemode">Beams</span><span class="seg" data-v="fcmodeseg"></span><span class="fc-note" data-v="fcmodenote"></span></div>' +
       '<div class="fc-row" data-v="fcaim" hidden><span class="lbl" data-tip="aim">Aim</span><span class="seg" data-v="fcaimseg"></span><span class="fc-note" data-v="fcaimnote"></span></div>' +
       '<div class="fc-row" data-v="fcsalvo" hidden><span class="lbl" data-tip="salvo">Salvo</span><span class="btnrow" style="flex:1" data-v="fcsalvobtns"></span></div>' +
-      '<div class="kv" style="margin-top:6px" data-v="pdrows"></div>' +
+      '<div class="kv rows" style="margin-top:6px" data-v="pdrows"></div>' +
       '<div class="btnrow" style="margin-top:6px" data-v="engbtns"></div></div>';
   }
   function bindSeg(host, items, ship, keyFor) {
@@ -447,7 +477,7 @@
         if (!bound.fcmodeseg.dataset.built) { bindSeg(bound.fcmodeseg, FIRE_MODES, ship); bound.fcmodeseg.dataset.built = '1'; }
         let note = '';
         bound.fcmodeseg.querySelectorAll('[data-eng]').forEach((b) => { const a = by[b.dataset.eng]; b.classList.toggle('active', !!(a && a.active)); b.disabled = !a; b.title = a && a.tip ? a.tip : ''; if (a && a.active && a.tip) note = a.tip; });
-        if (bound.fcmodenote.textContent !== note) bound.fcmodenote.textContent = note;
+        { const nn = nbPct(note); if (bound.fcmodenote.textContent !== nn) bound.fcmodenote.textContent = nn; }
       }
     }
     if (bound.fcaim) {
@@ -456,7 +486,7 @@
         if (!bound.fcaimseg.dataset.built) { bindSeg(bound.fcaimseg, AIMS, ship); bound.fcaimseg.dataset.built = '1'; }
         let note = '';
         bound.fcaimseg.querySelectorAll('[data-eng]').forEach((b) => { const a = by[b.dataset.eng]; b.classList.toggle('active', !!(a && a.active)); b.disabled = !a; b.title = a && a.tip ? a.tip : ''; if (a && a.active && a.tip) note = a.tip; });
-        if (bound.fcaimnote.textContent !== note) bound.fcaimnote.textContent = note;
+        { const nn = nbPct(note); if (bound.fcaimnote.textContent !== nn) bound.fcaimnote.textContent = nn; }
       }
     }
     if (bound.fcsalvo) {
@@ -494,14 +524,14 @@
         let r = null; try { r = OD.Engagement.pdReport(ship); } catch (e) { r = null; }
         if (r && r.mounts > 0) {
           const v = r.live + ' of ' + r.mounts + (r.engaging ? ' · ' + r.engaging + ' engaging' : '') + (r.ratePerMin ? ' · stops ' + Math.round(r.ratePerMin) + '/min' : '') + (r.kills ? ' · ' + r.kills + ' kills' : '');
-          html = '<span class="k" data-tip="pd">Point defence</span><span class="v' + (r.live === 0 ? ' crit' : r.engaging ? ' warn' : '') + '">' + esc(v) + '</span>';
+          html = kvRow('Point defence', v, { tip: 'pd', cls: r.live === 0 ? 'crit' : r.engaging ? 'warn' : '', width: rowsWidth(bound.pdrows) });
         }
       }
       // the crew on the mounts and on the sensors (v13): one row each when the watch is off its rated value
       const sh = OD.Engagement.shared;
       let fw = '';
       if (sh && typeof sh.fireWords === 'function') { try { fw = sh.fireWords(ship) || ''; } catch (e) { fw = ''; } }
-      for (const words of [fw, sensorWatchWords(ship)]) html += crewWatchRow(words);
+      for (const words of [fw, sensorWatchWords(ship)]) html += crewWatchRow(words, rowsWidth(bound.pdrows));
       if (bound.pdrows.innerHTML !== html) bound.pdrows.innerHTML = html;
     }
     // anything else the module offers (legacy 'launch' / 'holdbeams', or new ids) stays a plain key row
@@ -589,13 +619,35 @@
     return 'Sensor watch at ' + U.fmt.pct(f) + ': ' + why;
   }
   // "Fire control at 70 %: no party on it." → a key-and-value row beside the point-defence rows.
-  function crewWatchRow(words) {
+  function crewWatchRow(words, width) {
     if (!words) return '';
     const i = words.indexOf(':');
     const k = i > 0 ? words.slice(0, i) : 'Fire control', v = i > 0 ? words.slice(i + 1).trim() : words;
     const pct = /at (\d+) %/.exec(k);
-    return '<span class="k" data-tip="crew">' + esc(k) + '</span><span class="v' + (pct && +pct[1] < 100 ? ' warn' : '') + '">' + esc(v) + '</span>';
+    return kvRow(k, v, { tip: 'crew', cls: pct && +pct[1] < 100 ? 'warn' : '', width });
   }
+  // v15: a key-and-value row of the fire-control block. A value that fits beside its key sits on the key's line,
+  // right-aligned; a longer one ('holding: out of burn-through range (928 km)') takes the full width on the line
+  // under its key instead of wrapping into a column a few words wide. The test is the width the two need in the
+  // panel's fonts (13 px sans for the key, 13 px mono at 0.6 em a figure for the value).
+  // a number never parts from its unit: the space between a figure and the unit after it becomes a no-break space
+  // (the unit list configurator.js keeps its engineer's lines whole with), so 'turn rate at 72' / '%' and '60' / 'kt'
+  // cannot happen, and a ± stays with the figure after it ('±' / '770 km')
+  const KEEP_UNIT = /(\d) (?=(?:%|kt|kg|km\/s|m\/s|km|cm|m²|[kMG]?[WJN]|[tmsKg])(?![\w²]))/g;
+  function nbPct(t) { return String(t).replace(KEEP_UNIT, '$1\u00a0').replace(/± (?=\d)/g, '±\u00a0'); }
+  // in HTML a number with thousands groups (their thin space is a break opportunity) sits in one span that never
+  // wraps, with its ± and its unit; the words are unchanged apart from the no-break spaces
+  function keepNums(html) { return nbPct(html).replace(/(?:±\u00a0)?\d+(?:\u2009\d{3})+(?:\u00a0[a-zµ%][a-zA-Z\/²]*)?/g, (m) => '<span class="nw">' + m + '</span>'); }
+  // a decision card sentence gets the same treatment ('about 1 100 km' never breaks after the 1); the words are
+  // written only when they change
+  function setKept(el, v) { v = v || ''; if (el.dataset.t === v) return; el.dataset.t = v; el.innerHTML = keepNums(esc(v)); }
+  function kvRow(k, v, o) {
+    o = o || {};
+    const width = o.width || 280;
+    const long = String(k).length * 6.9 + 12 + String(v).length * 7.8 > width;
+    return '<div class="kvr' + (long ? ' long' : '') + '"' + (o.adv ? ' data-adv' : '') + '><span class="k"' + (o.tip ? ' data-tip="' + esc(o.tip) + '"' : '') + (o.title ? ' title="' + esc(o.title) + '"' : '') + '>' + esc(k) + '</span><span class="v' + (o.cls ? ' ' + o.cls : '') + '">' + keepNums(esc(v)) + '</span></div>';
+  }
+  function rowsWidth(el) { const w = el ? el.clientWidth : 0; return w > 0 ? w : 280; }
   // The party Send takes: a standby party first, then a sick-bay party with nobody left to treat, then the
   // sensor watch, then fire control (a sick bay with wounded in it stays: the medical card owns that trade).
   function freeParty(ship) {
@@ -614,7 +666,8 @@
     const live = liveAccel(ship), rated = ship.accelNominal(), fac = rated > 0 ? live / rated : 1;
     const drive = ship.systems ? ship.systems.drive : 1;
     let none = '';
-    if (ship.destroyed) none = 'no thrust: she is destroyed';
+    if (!hasDrive(ship)) none = 'no thrust: she has no drive';
+    else if (ship.destroyed) none = 'no thrust: she is destroyed';
     else if (ship.propMass <= 0) none = 'no thrust: the tanks are dry';
     else if (ship.disabled) none = 'no thrust: she is out of the fight';
     else if (!(drive > 0)) none = 'no thrust: the drive is wrecked';
@@ -668,11 +721,11 @@
       if (bad) { hurt++; if (word === 'wrecked') wrecked++; if (worthIt) actionable++; counts[word] = (counts[word] || 0) + 1; }
       if (bad && !party && !worthIt && !full) { (can ? small : past).push((r.name || r.id) + ' ' + pct + ' %'); continue; }
       html += '<div class="dmg-row' + (bad ? ' ' + esc(word) : '') + '"' + (bad ? '' : ' data-ok') + '><span class="k">' + esc(r.name || r.id) + '</span>' + bar('hull', hp) + '<span class="v">' + pct + ' %' + (bad ? ' · ' + esc(word) : '') + '</span>' +
-        (bad && r.effect ? '<div class="dmg-fx">' + esc(r.effect) + '</div>' : '');
+        (bad && r.effect ? '<div class="dmg-fx">' + keepNums(esc(r.effect)) + '</div>' : '');
       if (party) {
         working++;
         const paused = !!(board.crew && board.crew.strapped) || !!q.blocked; // strapped in, or the part is running (crew.js inUse)
-        html += '<div class="dmg-party"><span class="ring' + (paused ? ' paused' : '') + '" style="--p:' + Math.round((party.progress || 0) * 100) + '%"></span><span>' + esc(party.words || ('Party ' + party.id.replace(/^p/, '') + (party.eta > 0 ? ' · ' + etaWords(party.eta) : ''))) + '</span><button class="sm" data-recall="' + esc(party.id) + '">Recall</button></div>';
+        html += '<div class="dmg-party"><span class="ring' + (paused ? ' paused' : '') + '" style="--p:' + Math.round((party.progress || 0) * 100) + '%"></span><span>' + keepNums(esc(party.words || ('Party ' + party.id.replace(/^p/, '') + (party.eta > 0 ? ' · ' + etaWords(party.eta) : '')))) + '</span><button class="sm" data-recall="' + esc(party.id) + '">Recall</button></div>';
         // the moment an order stops a running repair, say so once: the ring alone reads as slow, not stopped
         const key = r.id, was = heldSeen[key], now = q.blocked ? String(q.blocked) : '';
         if (now && was !== now && own && game.sim && ship.faction === game.sim.playerFaction) {
@@ -699,10 +752,10 @@
           if (OD.Decisions && typeof OD.Decisions.tradeWords === 'function') { try { tradeWords = String(OD.Decisions.tradeWords(ship, r.id) || ''); } catch (e) { tradeWords = ''; } }
           const pnum = freeId ? String(freeId).replace(/^p/, '') : '';
           const label = !freeId ? '' : tradeWords ? tradeWords + ' · party ' + pnum + ' works' : sendLabel + ' · waits for the part';
-          html += '<div class="dmg-party"><span>' + esc(text) + '</span>' + (label ? '<button class="sm" data-send="' + esc(r.id) + '"' + (tradeWords ? ' data-clear="1"' : '') + '>' + esc(label) + '</button>' : '') + '</div>';
+          html += '<div class="dmg-party"><span>' + keepNums(esc(text)) + '</span>' + (label ? '<button class="sm" data-send="' + esc(r.id) + '"' + (tradeWords ? ' data-clear="1"' : '') + '>' + esc(label) + '</button>' : '') + '</div>';
           if (!freeId) noFree = true;
-        } else if (can) { html += '<div class="dmg-party"><span>' + esc(buys) + '</span>' + (sendLabel ? '<button class="sm" data-send="' + esc(r.id) + '">' + esc(sendLabel) + '</button>' : '') + '</div>'; if (!sendLabel) noFree = true; }
-        else if (buys) html += '<div class="dmg-party"><span style="color:var(--dim)">' + esc(buys) + '</span></div>';
+        } else if (can) { html += '<div class="dmg-party"><span>' + keepNums(esc(buys)) + '</span>' + (sendLabel ? '<button class="sm" data-send="' + esc(r.id) + '">' + esc(sendLabel) + '</button>' : '') + '</div>'; if (!sendLabel) noFree = true; }
+        else if (buys) html += '<div class="dmg-party"><span style="color:var(--dim)">' + keepNums(esc(buys)) + '</span></div>';
       } else heldSeen[r.id] = '';
       html += '</div>';
     }
@@ -710,15 +763,15 @@
       // Essentials folds the rows with no button of their own: the small jobs Full still offers, and the parts
       // past a jury-rig's reach, in two clauses so the line never calls a job Full sells "not worth a party"
       const bits = [];
-      if (small.length) bits.push(small.length + (small.length === 1 ? ' smaller job' : ' smaller jobs') + ': ' + esc(small.join(', ')) + '.');
-      if (past.length) bits.push(past.length + (past.length === 1 ? ' part' : ' parts') + ' past a jury-rig: ' + esc(past.join(', ')) + '.');
+      if (small.length) bits.push(small.length + (small.length === 1 ? ' smaller job' : ' smaller jobs') + ': ' + keepNums(esc(small.join(', '))) + '.');
+      if (past.length) bits.push(past.length + (past.length === 1 ? ' part' : ' parts') + ' past a jury-rig: ' + keepNums(esc(past.join(', '))) + '.');
       html += '<div class="dmg-past" style="grid-column:1/-1">' + bits.join(' ') + (own ? ' Full lists them.' : '') + '</div>';
     }
     if (!hurt && ship.hull >= 0.999) html += '<div class="dmg-empty" style="grid-column:1/-1">No damage.</div>';
     if (bound.dmg.innerHTML !== html) bound.dmg.innerHTML = html;
-    if (bound.crew) { const t = board ? (board.words || '') : ''; if (bound.crew.textContent !== t) bound.crew.textContent = t; }
+    if (bound.crew) { const t = nbPct(board ? (board.words || '') : ''); if (bound.crew.textContent !== t) bound.crew.textContent = t; }
     if (bound.crew) { let nf = document.getElementById('dmgNoFree'); if (noFree && !nf) { nf = document.createElement('div'); nf.id = 'dmgNoFree'; nf.textContent = NO_PARTY; bound.crew.insertAdjacentElement('afterend', nf); } else if (!noFree && nf) nf.remove(); }
-    if (bound.gwords) { const t = board ? (board.gWords || '') : ''; if (bound.gwords.textContent !== t) bound.gwords.textContent = t; }
+    if (bound.gwords) { const t = nbPct(board ? (board.gWords || '') : ''); if (bound.gwords.textContent !== t) bound.gwords.textContent = t; }
     if (bound.gmode) { const mode = board && board.crew ? board.crew.gMode : null; bound.gmode.querySelectorAll('[data-g]').forEach((b) => b.classList.toggle('active', b.dataset.g === mode)); bound.gmode.style.display = board ? '' : 'none'; }
     if (bound.dmgstate) {
       // the pill counts the same rows the board lists, so the header and the rows never disagree
@@ -771,12 +824,21 @@
     const q = capById[worst.id] || worst;
     const phone = window.innerWidth < 900;
     const name = partPlainName(ship, worst);
-    let text = name.charAt(0).toUpperCase() + name.slice(1) + ' on ' + ship.name + ' is hit, down to ' + U.fmt.pct(U.clamp(worst.hp == null ? 1 : worst.hp, 0, 1)) + '.';
-    text += phone ? ' Open Damage control in the panel.' : ' Open Damage control in the panel, or press C.';
     const can = q.repairable != null ? !!q.repairable : !!worst.repairable;
     const cap = q.cap != null ? q.cap : worst.cap;
-    if (can && typeof cap === 'number' && cap > 0) text += ' A party can jury-rig it back to ' + U.fmt.pct(U.clamp(cap, 0, 1)) + '.';
-    showHint({ id: 'v8dmg', text, anchor: '#shipPanel', action: phone ? { label: 'Open the board', run: () => damageBoard() } : null });
+    const say = (hp) => {
+      let text = name.charAt(0).toUpperCase() + name.slice(1) + ' on ' + ship.name + ' is hit, down to ' + U.fmt.pct(U.clamp(hp, 0, 1)) + '.';
+      text += phone ? ' Open Damage control in the panel.' : ' Open Damage control in the panel, or press C.';
+      if (can && typeof cap === 'number' && cap > 0) text += ' A party can jury-rig it back to ' + U.fmt.pct(U.clamp(cap, 0, 1)) + '.';
+      return nbPct(text);
+    };
+    // v15: the hint quotes the part's number as it is now (it read 77 % while the board read 58 %), and it goes
+    // once a party has the part back to what a jury-rig gives, or the ship is lost
+    const hpNow = () => { const c = Array.isArray(ship.components) ? ship.components.find((x) => x.id === worst.id) : null; return c ? (c.hp == null ? 1 : c.hp) : null; };
+    const hp0 = worst.hp == null ? 1 : worst.hp, mendTo = typeof cap === 'number' && cap > 0 && hp0 < cap - 0.005 ? cap - 0.005 : Infinity;
+    showHint({ id: 'v8dmg', text: say(hp0), anchor: '#shipPanel', action: phone ? { label: 'Open the board', run: () => damageBoard() } : null,
+      refresh: () => { const hp = hpNow(); return hp == null ? null : say(hp); },
+      until: () => { const hp = hpNow(); return !!(ship.destroyed || ship.captured || hp == null || hp >= mendTo); } });
     // the section forcing itself open is not enough on a tall panel: put the board on screen
     scrollPanelTo(bound.syssec);
   }
@@ -841,27 +903,42 @@
   function updatePanel(ship) {
     const sim = game.sim;
     if (!ship) { if (panelShip) { $('shipPanel').innerHTML = '<div class="empty">Click one of your ships to take command, or pick it from the fleet list.</div>'; panelShip = null; } return; }
-    if (panelShip !== ship.id || panelHasEng !== (!!OD.Engagement + ':' + !!(OD.Damage && OD.Damage.report))) buildPanel(ship);
-    const set = (k, v, cls) => { const el = bound[k]; if (!el) return; if (el.textContent !== v) el.textContent = v; if (cls !== undefined) el.className = el.className.replace(/\b(good|warn|crit)\b/g, '').trim() + (cls ? ' ' + cls : ''); };
+    // a hostile is shown as our sensors hold her (hostilePic); her target and her plan are her orders, never read
+    const pic = hostilePic(sim, ship);
+    if (panelShip !== ship.id || panelHasEng !== panelKey(pic)) buildPanel(ship, pic);
+    // every value keeps its numbers whole: a figure never parts from its unit or its ±, and a figure with
+    // thousands groups never breaks at the thin space (keepNums)
+    const set = (k, v, cls) => {
+      const el = bound[k]; if (!el) return;
+      v = String(v);
+      if (el.dataset.t !== v) { el.dataset.t = v; if (/\d\u2009\d/.test(v)) el.innerHTML = keepNums(esc(v)); else el.textContent = nbPct(v); }
+      if (cls !== undefined) el.className = el.className.replace(/\b(good|warn|crit)\b/g, '').trim() + (cls ? ' ' + cls : '');
+    };
     const panel = $('shipPanel');
-    const target = ship.target ? sim.byId(ship.target) : null;
-    const plan = OD.Guide ? OD.Guide.plan(sim, ship) : null;
+    const target = !pic && ship.target ? sim.byId(ship.target) : null;
+    const plan = !pic && OD.Guide ? OD.Guide.plan(sim, ship) : null;
+    const fix = pic ? trackFix(sim, ship, pic) : null;
 
     // navigator
-    if (OD.Guide && bound.nav) {
+    if (pic) trackPanel(sim, ship, pic, fix, set);
+    else if (OD.Guide && bound.nav) {
       const n = OD.Guide.narrate(sim, ship);
       set('navtext', n.text); set('navsub', n.sub);
       if (bound.nav.dataset.phase !== n.phase) bound.nav.dataset.phase = n.phase;
       const tip = OD.Guide.suggest(sim, ship);
       if (bound.navtip) { bound.navtip.hidden = !tip; if (tip) set('navtip', tip); }
     }
-    if (bound.ostate) { const th = ship.throttle; set('ostate', ship.disabled ? 'disabled' : th > 0 ? 'burning ' + Math.round(th * 100) + '%' : Math.abs(U.angleDiff(ship.cmdHeading, ship.heading)) > 0.05 ? 'turning' : 'coasting'); bound.ostate.className = 'pill ' + (th > 0 ? 'good' : ''); }
+    if (!pic && bound.ostate) { const th = ship.throttle; set('ostate', ship.disabled ? 'disabled' : th > 0 ? 'burning ' + Math.round(th * 100) + '%' : Math.abs(U.angleDiff(ship.cmdHeading, ship.heading)) > 0.05 ? 'turning' : 'coasting'); bound.ostate.className = 'pill ' + (th > 0 ? 'good' : ''); }
 
     // delta-v
     const dvNow = ship.deltaV(), dvFull = ship.deltaVFull();
-    const dvf = dvNow / dvFull;
-    set('dv', U.fmt.dv(dvNow) + ' · ' + Math.round(dvf * 100) + '%', dvf < 0.15 ? 'crit' : dvf < 0.35 ? 'warn' : '');
-    set('vdv', U.fmt.dv(dvNow), dvf < 0.15 ? 'crit' : dvf < 0.35 ? 'warn' : '');
+    const noDrive = !hasDrive(ship);
+    const dvf = dvFull > 0 ? dvNow / dvFull : 0;
+    if (noDrive) { set('dv', 'no drive', ''); set('vdv', 'no drive', ''); }
+    else {
+      set('dv', U.fmt.dv(dvNow) + ' · ' + Math.round(dvf * 100) + '%', dvf < 0.15 ? 'crit' : dvf < 0.35 ? 'warn' : '');
+      set('vdv', U.fmt.dv(dvNow), dvf < 0.15 ? 'crit' : dvf < 0.35 ? 'warn' : '');
+    }
     if (bound.dvfill) bound.dvfill.style.width = Math.round(U.clamp(dvf, 0, 1) * 100) + '%';
     if (bound.dvcost) {
       const cost = plan && plan.active ? Math.min(plan.dv, dvNow) : 0;
@@ -870,20 +947,28 @@
       bound.dvcost.style.width = Math.round(U.clamp(cost / dvFull, 0, 1) * 100) + '%';
       bound.dvcost.classList.toggle('over', !!(plan && plan.active && !plan.feasible));
     }
-    set('dvplan', plan && plan.active ? 'this order: ' + U.fmt.dv(plan.dv) + (plan.feasible ? '' : ' · not enough') : 'no burn planned', plan && plan.active && !plan.feasible ? 'crit' : '');
+    if (pic) set('dvplan', '');
+    else set('dvplan', plan && plan.active ? 'this order: ' + U.fmt.dv(plan.dv) + (plan.feasible ? '' : ' · not enough') : 'no burn planned', plan && plan.active && !plan.feasible ? 'crit' : '');
     set('dvfull', 'full ' + U.fmt.dv(dvFull));
-    set('accel', U.fmt.accel(ship.accel()));
+    set('accel', noDrive ? 'no drive' : U.fmt.accel(ship.accel()));
     set('mass', U.fmt.mass(ship.mass()) + ' (' + U.fmt.mass(ship.propMass) + ')');
     set('speed', U.fmt.speed(U.len(ship.vel)));
-    set('heading', U.fmt.deg(ship.heading) + (Math.abs(U.angleDiff(ship.cmdHeading, ship.heading)) > 0.05 ? ' → ' + U.fmt.deg(ship.cmdHeading) : ''));
+    set('heading', U.fmt.deg(ship.heading) + (!pic && Math.abs(U.angleDiff(ship.cmdHeading, ship.heading)) > 0.05 ? ' → ' + U.fmt.deg(ship.cmdHeading) : ''));
     if (sim.body && bound.orbit) {
       const el = P.orbitalElements(sim.body.mu, ship.pos, ship.vel);
-      set('orbit', el.bound ? U.fmt.dist(el.periapsis - sim.body.radius) + ' × ' + U.fmt.dist(el.apoapsis - sim.body.radius) : 'escape', el.bound && el.periapsis < sim.body.radius ? 'crit' : '');
+      // v15: altitude above the surface, low point to high point, as the map's edge marker gives it
+      const lo = U.fmt.dist(el.periapsis - sim.body.radius), hi = U.fmt.dist(el.apoapsis - sim.body.radius);
+      const alt = el.bound ? (lo === hi ? lo + ', circular' : lo + ' to ' + hi) : U.fmt.dist(U.len(ship.pos) - sim.body.radius) + ', escaping';
+      set('orbit', alt, el.bound && el.periapsis < sim.body.radius ? 'crit' : '');
     }
 
     // target
     const facets = panel.querySelectorAll('.facing [data-f]');
-    if (target && !target.destroyed) {
+    if (pic) {
+      // a hostile held as a solution: range and closing from the ship of ours that holds her (trackFix)
+      set('vrange', fix ? U.fmt.dist(fix.d) : '—', '');
+      set('vclose', fix ? (fix.closing >= 0 ? '' : '−') + U.fmt.speed(Math.abs(fix.closing)) : '—', '');
+    } else if (target && !target.destroyed) {
       // vitals about a hostile come through our track on her, with the uncertainty shown, not the true state
       let tp = target.pos, tv = target.vel, fuzz = null;
       if (OD.Sensors && sim.isHostile(target, ship)) {
@@ -891,19 +976,23 @@
         if (tr0 && tr0.est && tr0.est.pos && tr0.q < ((OD.Sensors.T && OD.Sensors.T.solutionQ) || 2.7)) { tp = tr0.est.pos; tv = tr0.est.vel || target.vel; fuzz = tr0; }
       }
       const r = U.sub(tp, ship.pos), d = U.len(r);
-      const closing = -U.dot(U.sub(tv, ship.vel), U.norm(r));
+      // two hulls in one orbit differ by rounding only: under 0.05 m/s is 0, never '−3.84e-9 m/s'
+      const closing0 = -U.dot(U.sub(tv, ship.vel), U.norm(r)), closing = Math.abs(closing0) < 0.05 ? 0 : closing0;
       const two = (x) => Number(x.toPrecision(2));
       const rerr = fuzz ? (fuzz.rangeErr || fuzz.posErr || 0) : 0;
       set('tname', target.name);
       set('vrange', fuzz ? (rerr > 0 ? km(two(d)) + ' ± ' + km(two(rerr)) : '≈ ' + km(two(d))) : U.fmt.dist(d), fuzz ? 'warn' : '');
       if (fuzz && fuzz.word === 'contact') set('vclose', 'unknown', 'warn');
       else set('vclose', (fuzz ? '≈ ' : '') + (closing >= 0 ? '' : '−') + U.fmt.speed(fuzz ? two(Math.abs(closing)) : Math.abs(closing)), closing < 0 ? 'warn' : '');
-      if (closing > 1) { const stop = P.stoppingDistance(closing, liveAccel(ship)); set('tstop', U.fmt.dist(stop) + (stop > d ? ' · overshoot' : ''), stop > d ? 'crit' : stop > 0.8 * d ? 'warn' : ''); }
+      // with no thrust the ship cannot stop at all: say why instead of printing an infinite distance
+      const why = liveAccel(ship) > 0 ? '' : noThrustWhy(ship);
+      if (closing > 1 && why) set('tstop', 'never: ' + why, 'crit');
+      else if (closing > 1) { const stop = P.stoppingDistance(closing, liveAccel(ship)); set('tstop', U.fmt.dist(stop) + (stop > d ? ' · overshoot' : ''), stop > d ? 'crit' : stop > 0.8 * d ? 'warn' : ''); }
       else set('tstop', closing < -1 ? 'opening' : '—', '');
       if (OD.Guide) {
         const active = plan && plan.active && plan.order.target === target.id;
         const hp = active ? plan : OD.Guide.plan(sim, ship, { type: 'intercept', target: target.id, range: 2000, vmax: ship.order.vmax });
-        set('test', hp.active ? OD.Guide.summary(hp) : '—', hp.active && !hp.feasible ? 'crit' : '');
+        set('test', hp.active ? OD.Guide.summary(hp) : why ? 'none: ' + why : '—', hp.active && !hp.feasible ? 'crit' : !hp.active && why ? 'warn' : '');
         const eta = active ? OD.Guide.eta(sim, plan, plan.arrive) : null;
         // The plan flies the target as a coasting body. While she burns, the arrival is only as good as
         // her next order: with her drive out-pulling ours it never comes, otherwise it holds if she coasts.
@@ -923,7 +1012,8 @@
         if (facet === 'tail' && tA != null) fsuffix = ' · ' + U.fmt.time(tA) + ' more';
         else if (facet === 'nose' && tF != null && tF > 2) fsuffix = ' · tail from flip in ' + U.fmt.time(tF);
       }
-      set('tfacing', facet + ' ' + ship.armour[facet] + ' cm' + fsuffix, facet === 'tail' ? 'crit' : facet === 'flank' ? 'warn' : 'good');
+      if (armourAllRound(ship)) set('tfacing', ship.armour.nose + ' cm all round', '');
+      else set('tfacing', facet + ' ' + ship.armour[facet] + ' cm' + fsuffix, facet === 'tail' ? 'crit' : facet === 'flank' ? 'warn' : 'good');
       facets.forEach((f) => { f.classList.toggle('seen', f.dataset.f === facet); f.setAttribute('class', 'f-' + f.dataset.f + (f.dataset.f === facet ? ' seen' : '')); });
       set('tstate', target.faction === ship.faction ? 'friendly' : sim.isHostile(target, ship) ? 'hostile' : 'civilian');
       bound.tstate.className = 'pill ' + (sim.isHostile(target, ship) ? 'warn' : '');
@@ -962,15 +1052,19 @@
     if (bound.pv_intercept && OD.Guide) {
       const vmax = $('pVmax') && +$('pVmax').value ? +$('pVmax').value : undefined;
       const rangeKm = $('pRange') ? Math.max(1, +$('pRange').value) : 200;
+      // v15: a hull that cannot burn (dry tanks, a wrecked drive) says why on each key that needs a burn
+      const cant = liveAccel(ship) > 0 ? '' : noThrustWhy(ship);
       const preview = (type, order) => {
         if (!target || target.destroyed) return 'needs a target';
+        if (cant) return cant;
         if (ship.order.type === type && ship.order.target === target.id && (type !== 'keeprange' || Math.round(ship.order.range / 1000) === rangeKm)) return plan && plan.active ? (plan.arrive ? 'arrive in ' + U.fmt.time(OD.Guide.eta(sim, plan, plan.arrive)) : 'active') : 'active';
         const hp = OD.Guide.plan(sim, ship, order);
         return hp.active ? OD.Guide.summary(hp) : '—';
       };
       set('pv_intercept', preview('intercept', { type: 'intercept', target: target && target.id, range: 2000, vmax }));
       set('pv_keeprange', preview('keeprange', { type: 'keeprange', target: target && target.id, range: rangeKm * 1000, vmax }));
-      set('pv_matchv', target && !target.destroyed ? (ship.order.type === 'matchv' ? 'active' : U.fmt.speed(U.len(U.sub(ship.vel, target.vel))) + ' to cancel') : 'needs a target');
+      set('pv_matchv', target && !target.destroyed ? (cant || (ship.order.type === 'matchv' ? 'active' : U.fmt.speed(U.len(U.sub(ship.vel, target.vel))) + ' to cancel')) : 'needs a target');
+      set('pv_retreat', cant || 'full burn away');
     }
     if ($('pJink')) { $('pJink').classList.toggle('active', !!ship.jink); $('pJink').setAttribute('aria-pressed', String(!!ship.jink)); }
     if ($('pManual')) { const m = ship.order.type === 'manual'; $('pManual').hidden = !m; $('pManual2').hidden = !m; if (m) { set('mhead', U.fmt.deg(ship.order.heading || 0)); set('mthr', Math.round((ship.order.throttle || 0) * 100) + '%'); } }
@@ -1006,14 +1100,15 @@
       let rows = (OD.Engagement.shipReadout && OD.Engagement.shipReadout(ship)) || [];
       if (OD.Engagement.fireMode) rows = rows.filter((r) => !/^(fire mode|aim|point defence|incoming)$/i.test(r.label || ''));
       rows = rows.concat(burnRows(ship));
-      const html = rows.map((r) => { const adv = FULL_ROWS.test(r.label) ? ' data-adv' : ''; return '<span class="k"' + adv + (r.tip ? ' title="' + esc(r.tip) + '"' : '') + '>' + esc(r.label) + '</span><span class="v"' + adv + '>' + esc(r.value) + '</span>'; }).join('');
+      const width = rowsWidth(bound.engrows);
+      const html = rows.map((r) => kvRow(r.label, r.value, { adv: FULL_ROWS.test(r.label), title: r.tip, width })).join('');
       if (bound.engrows.innerHTML !== html) bound.engrows.innerHTML = html;
       updateFireControl(ship);
       if ($('pWF')) { $('pWF').classList.toggle('active', !!ship.weaponsFree); $('pWF').setAttribute('aria-pressed', String(!!ship.weaponsFree)); }
     }
     $('pFollow').classList.toggle('active', game.cam.follow === ship.id);
     const det = $('pDetail'); if (det) { det.classList.toggle('active', UI.detail === 'full'); det.setAttribute('aria-pressed', String(UI.detail === 'full')); const want = (UI.detail === 'full' ? 'Full' : 'Essentials') + '<kbd>D</kbd>'; if (det.innerHTML !== want) det.innerHTML = want; }
-    drawPortrait(ship);
+    drawPortrait(ship, pic);
   }
 
   // ------------------------------------------------------------------ hull drawing (portrait, hull view)
@@ -1125,21 +1220,30 @@
   }
   function sizeCanvas(c) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const W = c.clientWidth || c.width, H = c.clientHeight || c.height;
-    if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+    // v15: a canvas with no box (the phone panel is hidden while a card is open) keeps its backing store; taking
+    // c.width as its CSS width doubled the portrait's store on every refresh at 2× (1.5 billion px in 4 s)
+    const shown = c.clientWidth > 0 && c.clientHeight > 0;
+    const W = shown ? c.clientWidth : c.width / dpr, H = shown ? c.clientHeight : c.height / dpr;
+    if (shown && (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr))) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
     const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return { ctx, W, H };
   }
-  function drawPortrait(ship) {
-    const c = $('pPortrait'); if (!c) return;
+  function drawPortrait(ship, pic) {
+    const c = $('pPortrait'); if (!c || !c.clientWidth) return;
     const { ctx, W, H } = sizeCanvas(c);
     ctx.clearRect(0, 0, W, H);
-    // the ship sits low-left so the Follow and Full keys in the top-right corner never cover it
-    const fit = fitArt(ship, 'side', Math.min(W * 0.72, H * 2.2), W * 0.72, H * 0.6);
-    drawHull(ctx, ship, W * 0.38 + fit.dx, H * 0.62 + fit.dy, fit.L, 'side', { quality: 'low', live: true });
     ctx.font = '9.5px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(127,145,167,0.9)'; ctx.textAlign = 'left';
-    ctx.fillText((OD.Ships.CLASSES[ship.cls].length) + ' m', 8, H - 6);
-    ctx.textAlign = 'right'; ctx.fillText('hull view  V', W - 8, H - 6);
+    // a bare contact has no picture, as in the hull view; a track shows the class and its radiators, nothing live
+    if (pic && pic.level === 'contact') ctx.fillText('contact only: no picture', 8, H - 6);
+    else {
+      // the ship sits low-left so the Follow and Full keys in the top-right corner never cover it
+      const fit = fitArt(ship, 'side', Math.min(W * 0.72, H * 2.2), W * 0.72, H * 0.6);
+      drawHull(ctx, ship, W * 0.38 + fit.dx, H * 0.62 + fit.dy, fit.L, 'side', pic && pic.level === 'track' ? { quality: 'low', plain: true } : { quality: 'low', live: true });
+      ctx.font = '9.5px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(127,145,167,0.9)'; ctx.textAlign = 'left';
+      ctx.fillText((OD.Ships.CLASSES[ship.cls].length) + ' m', 8, H - 6);
+    }
+    // the V key only where there is a keyboard (index.html hides key letters on a touch screen the same way)
+    ctx.textAlign = 'right'; ctx.fillText(coarseQuery && coarseQuery.matches ? 'hull view' : 'hull view  V', W - 8, H - 6);
   }
 
   // ------------------------------------------------------------------ hull view screen
@@ -1235,6 +1339,94 @@
     }
     ctx.textAlign = 'left';
   }
+  // v15: part labels in two columns beside the picture, for a hull about as tall as it is long (a station, a
+  // hull seen from above with its radiators out). Each column takes the parts on its side, its labels sit as
+  // near their parts' heights as the 13 px spacing allows, and each leader runs straight from the part to its
+  // label. Two leaders that cross swap labels, so no leaders cross.
+  function spreadLabels(want, step, lo, hi) {
+    // the closest heights to want (ascending) that keep step apart and stay inside lo..hi when they fit
+    const blocks = [];
+    want.forEach((d, i) => {
+      let b = { sum: d - i * step, n: 1 };
+      while (blocks.length && blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n >= b.sum / b.n) { const p = blocks.pop(); b = { sum: p.sum + b.sum, n: p.n + b.n }; }
+      blocks.push(b);
+    });
+    const out = [], top = Math.max(lo, hi - (want.length - 1) * step);
+    for (const b of blocks) { const z = Math.min(Math.max(b.sum / b.n, lo), top); for (let k = 0; k < b.n; k++) out.push(z + out.length * step); }
+    return out;
+  }
+  function segCross(ax, ay, bx, by, cx, cy, dx, dy) {
+    const o = (px, py, qx, qy, rx, ry) => (qx - px) * (ry - py) - (qy - py) * (rx - px);
+    const d1 = o(cx, cy, dx, dy, ax, ay), d2 = o(cx, cy, dx, dy, bx, by), d3 = o(ax, ay, bx, by, cx, cy), d4 = o(ax, ay, bx, by, dx, dy);
+    return d1 * d2 < 0 && d3 * d4 < 0;
+  }
+  function drawCalloutsLR(ctx, parts, cx, cy, W, H, fit) {
+    ctx.font = LABEL_FONT;
+    const STEP = 13, TOP = 32, BOT = H - 40, mid = W / 2;
+    const items = parts.slice(0, 16).map((p) => ({ label: p.label, px: cx + p.x, py: cy + p.y, w: ctx.measureText(p.label).width + 8 })).sort((a, b) => a.px - b.px || a.py - b.py);
+    let k = items.findIndex((it) => it.px >= mid); if (k < 0) k = items.length;
+    // neither column carries more than two labels over the other
+    while (k > items.length - k + 2) k--;
+    while (items.length - k > k + 2) k++;
+    const cols = [{ left: true, list: items.slice(0, k), bus: mid - fit.w / 2 - 12 }, { left: false, list: items.slice(k), bus: mid + fit.w / 2 + 12 }];
+    for (const col of cols) {
+      const list = col.list.sort((a, b) => a.py - b.py), n = list.length, ax = col.bus;
+      if (!n) continue;
+      const ys = spreadLabels(list.map((it) => it.py + 3.5), STEP, TOP, BOT);
+      list.forEach((it, i) => { it.ty = ys[i]; });
+      for (let pass = 0; pass < 40; pass++) {
+        let swapped = false;
+        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+          const a = list[i], b = list[j];
+          if (segCross(a.px, a.py, ax, a.ty - 3.5, b.px, b.py, ax, b.ty - 3.5)) { const t = a.ty; a.ty = b.ty; b.ty = t; swapped = true; }
+        }
+        if (!swapped) break;
+      }
+      for (const it of list) {
+        const yl = it.ty - 3.5, x0 = col.left ? ax - 4 - it.w : ax + 4;
+        ctx.strokeStyle = 'rgba(79,209,197,0.55)'; ctx.lineWidth = 1; ctx.beginPath();
+        ctx.moveTo(it.px, it.py); ctx.lineTo(ax, yl); ctx.lineTo(col.left ? ax - 4 : ax + 4, yl); ctx.stroke();
+        ctx.fillStyle = '#4fd1c5'; ctx.beginPath(); ctx.arc(it.px, it.py, 2, 0, U.TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(6,10,17,0.72)'; ctx.fillRect(x0 - 1, it.ty - 10, it.w + 2, 13);
+        ctx.fillStyle = 'rgba(224,232,240,0.94)'; ctx.textAlign = 'left'; ctx.fillText(it.label, x0 + 4, it.ty);
+      }
+    }
+    ctx.textAlign = 'left';
+  }
+  // v15: where the labels go sets how large the picture can be. Lanes above and below suit a long hull; two
+  // columns beside it suit a hull about as tall as it is long. The layout that draws the larger ship wins. It is
+  // worked out again when the ship, the view, the sensor picture or the box changes, and every half second.
+  const LABEL_FONT = '10.5px "IBM Plex Mono", ui-monospace, monospace';
+  let hullLay = null;
+  function hullLayout(ctx, sim, ship, view, pic, W, H, now) {
+    const key = ship.id + '|' + view + '|' + pic.level + '|' + W + 'x' + H;
+    if (hullLay && hullLay.key === key && now - hullLay.t < 500) return hullLay;
+    const L0 = Math.min(W * 0.84, H * (view === 'top' ? 1.05 : 1.7));
+    let labels = null;
+    if (pic.level === 'full' && typeof OD.ShipArt.callouts === 'function' && OD.Render.artReady(artId(ship))) {
+      try { labels = (OD.ShipArt.callouts(artId(ship), OD.Render.artOpts(ship, sim, { x: 0, y: 0, size: 120, view: ART_VIEW[view] || view, rotation: 0 })) || []).slice(0, 16).map((p) => p.label); } catch (e) { labels = null; }
+    }
+    let mode = 'plain', fit;
+    // no labels: small margins for the class caption above and the scale bar below
+    if (!labels || !labels.length) fit = fitArt(ship, view, L0, W * 0.9, H - 56);
+    else {
+      mode = 'lanes';
+      // a phone's two rows a side run 75 px in from each edge, so the picture stays between them
+      fit = fitArt(ship, view, L0, W * 0.86, H - (W < 430 ? 150 : 116));
+      ctx.font = LABEL_FONT;
+      const lw = Math.max.apply(null, labels.map((t) => ctx.measureText(t).width)) + 8;
+      const room = W - 2 * (lw + 26), perSide = Math.floor(labels.length / 2) + 1;
+      // a station always takes the columns: its parts stack along one axis, and lanes above and below bundled
+      // their leaders over the hub and ran them through the labels under the reactor
+      const station = (OD.Ships.CLASSES[ship.cls] || {}).role === 'station';
+      if (room > 80 && (perSide - 1) * 13 <= H - 72) {
+        const cols = fitArt(ship, view, L0, room, H - 56);
+        if (station || cols.L > fit.L * 1.12) { mode = 'columns'; fit = cols; }
+      }
+    }
+    hullLay = { key, t: now, mode, fit };
+    return hullLay;
+  }
   function drawHullScreen(sim, now) {
     const c = $('hullCanvas'); if (!c) return;
     const ship = sim.byId(hullState.shipId) || selected(); if (!ship) return;
@@ -1251,9 +1443,9 @@
     // v12: what the sensors give on a hostile decides what the screen shows: a bare contact has no picture, a
     // track shows the class and its radiators, a solution shows everything
     const pic = hullPicture(sim, ship);
-    // leave room above and below the picture for two lanes of part labels (one on a phone)
-    const fit = fitArt(ship, view, Math.min(W * 0.84, H * (view === 'top' ? 1.05 : 1.7)), W * 0.86, H - (W < 430 ? 64 : 116));
-    const L = fit.L, cx = W / 2 + fit.dx, cy = H / 2 + fit.dy;
+    // room for the part labels: lanes above and below, or columns beside (hullLayout)
+    const lay = hullLayout(ctx, sim, ship, view, pic, W, H, now);
+    const fit = lay.fit, L = fit.L, cx = W / 2 + fit.dx, cy = H / 2 + fit.dy;
     let drawn = false;
     if (pic.level === 'contact') {
       ctx.font = '13px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(224,232,240,0.8)'; ctx.textAlign = 'center';
@@ -1273,12 +1465,13 @@
     // callouts from the art module, when it offers them
     let parts = null;
     if (drawn && pic.level === 'full' && typeof OD.ShipArt.callouts === 'function') { try { parts = OD.ShipArt.callouts(artId(ship), OD.Render.artOpts(ship, sim, { x: 0, y: 0, size: L, view: ART_VIEW[view] || view, rotation: 0 })) || null; } catch (e) { parts = null; } }
-    if (parts && parts.length) drawCallouts(ctx, parts, cx, cy, W, H);
+    if (parts && parts.length) { if (lay.mode === 'columns') drawCalloutsLR(ctx, parts, cx, cy, W, H, fit); else drawCallouts(ctx, parts, cx, cy, W, H); }
     if (now - hullState.lastKv > 400) {
       hullState.lastKv = now;
       const nm = $('hullName'), sub = $('hullSub'), kv = $('hullKv'), pl = $('hullParts'), lv = $('hullLive');
-      const shown = pic.level === 'contact' && !pic.classKnown ? 'Unknown hull' : ship.name;
+      const shown = ship.name;
       if (nm && nm.textContent !== shown) nm.textContent = shown;
+      let subCut = '';
       if (sub) {
         const fac = OD.Ships.FACTIONS[ship.faction].name;
         let line;
@@ -1288,22 +1481,28 @@
         else if (pic.level === 'full') line = cls.name + ' · ' + fac + '. We hold a firing solution on her, so this is everything. ' + cls.blurb;
         else if (pic.level === 'track') line = cls.name + ' · ' + fac + '. We hold a track on her: the class and her radiators, nothing more.';
         else line = 'Class unknown · ' + fac + '. A bearing and a rough range, nothing more.';
-        if (sub.textContent !== line) sub.textContent = line;
+        if (sub.textContent !== line) { sub.textContent = line; sub.title = line; }
+        // v15: beside a fight the class line stops at two lines; when it is cut, the part list ends with all of it
+        if (sub.clientHeight > 0 && sub.scrollHeight > sub.clientHeight + 1) subCut = line;
       }
       const dash = '\u2014';
       const full = pic.level === 'full', known = pic.level !== 'contact';
+      // v15: a hull built without a drive shows one Drive row saying so, not a 1 m/s exhaust and 0 N of thrust
+      const drv = hasDrive(ship), round = armourAllRound(ship);
       const rows = [
-        ['Length', known ? cls.length + ' m' : dash], ['Dry mass', full ? U.fmt.mass(ship.dryMass) : dash], ['Propellant', full ? U.fmt.mass(ship.propMass) + ' / ' + U.fmt.mass(ship.fullPropMass) : dash],
-        ['Delta-v', full ? U.fmt.dv(ship.deltaV()) + ' / ' + U.fmt.dv(ship.deltaVFull()) : dash], ['Exhaust', known ? U.fmt.speed(ship.exhaustVelocity) : dash], ['Thrust', known ? U.fmt.si(ship.thrust, 'N') : dash], ['Accel.', full ? U.fmt.accel(liveAccel(ship)) : dash],
-        ['Radiators', known ? U.fmt.num(ship.radiatorArea) + ' m² · ' + Math.round(ship.radiators.state * 100) + '% out' : dash], ['Heat sink', full ? Math.round(ship.thermalLoad() * 100) + '% full' : dash],
-        ['Armour nose', full ? ship.armour.nose + ' cm' : dash], ['Armour flank / tail', full ? ship.armour.flank + ' / ' + ship.armour.tail + ' cm' : dash],
-        ['Hull', full ? Math.round(ship.hull * 100) + '%' : dash], ['Drive', full ? Math.round(ship.systems.drive * 100) + '%' : dash], ['Sensors', full ? Math.round(ship.systems.sensors * 100) + '%' : dash],
-      ];
+        ['Length', known ? cls.length + ' m' : dash], ['Dry mass', full ? U.fmt.mass(ship.dryMass) : dash]]
+        .concat(drv ? [['Propellant', full ? U.fmt.mass(ship.propMass) + ' / ' + U.fmt.mass(ship.fullPropMass) : dash],
+          ['Delta-v', full ? U.fmt.dv(ship.deltaV()) + ' / ' + U.fmt.dv(ship.deltaVFull()) : dash], ['Exhaust', known ? U.fmt.speed(ship.exhaustVelocity) : dash], ['Thrust', known ? U.fmt.si(ship.thrust, 'N') : dash], ['Accel.', full ? U.fmt.accel(liveAccel(ship)) : dash]]
+          : [['Drive', known ? 'none fitted' : dash]])
+        .concat([['Radiators', known ? U.fmt.num(ship.radiatorArea) + ' m² · ' + Math.round(ship.radiators.state * 100) + '% out' : dash], ['Heat sink', full ? Math.round(ship.thermalLoad() * 100) + '% full' : dash]])
+        .concat(round ? [['Armour', full ? ship.armour.nose + ' cm all round' : dash]] : [['Armour nose', full ? ship.armour.nose + ' cm' : dash], ['Armour flank / tail', full ? ship.armour.flank + ' / ' + ship.armour.tail + ' cm' : dash]])
+        .concat([['Hull', full ? Math.round(ship.hull * 100) + '%' : dash]], drv ? [['Drive', full ? Math.round(ship.systems.drive * 100) + '%' : dash]] : [], [['Sensors', full ? Math.round(ship.systems.sensors * 100) + '%' : dash]]);
       const fitted = full ? (ship.mounts.length ? ship.mounts.map((m) => m.name).join(' · ') : 'nothing') : known ? 'unknown until we hold a solution' : 'unknown';
       const html = rows.map(([k, v]) => '<span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>').join('') +
         '<span class="k" style="grid-column:1/-1;margin-top:6px">Fitted</span><span class="v" style="grid-column:1/-1;white-space:normal;text-align:left">' + esc(fitted) + '</span>';
       if (kv && kv.innerHTML !== html) kv.innerHTML = html;
-      const pt = parts && parts.length ? parts.map((p) => p.label + (p.text ? ': ' + p.text : '')).join('\n') : (drawn || pic.level === 'contact' ? '' : 'No detailed render for this hull yet. This is the structural silhouette.');
+      let pt = parts && parts.length ? parts.map((p) => p.label + (p.text ? ': ' + p.text : '')).join('\n') : (drawn || pic.level === 'contact' ? '' : 'No detailed render for this hull yet. This is the structural silhouette.');
+      if (subCut) pt = pt ? pt + '\n' + subCut : subCut;
       if (pl && pl.textContent !== pt) pl.textContent = pt;
       const strip = $('hullParties');
       if (strip) {
@@ -1340,6 +1539,62 @@
     if (tr.q >= tq && tr.classKnown !== false) return { level: 'track', classKnown: true, word: tr.word || 'track' };
     return { level: 'contact', classKnown: false, word: tr.word || 'contact' };
   }
+  // v15 round 3: the panel shows a hostile the way the hull view does, as far as our sensors hold her
+  // (hullPicture); null for our own hulls and civilians, which it shows whole
+  function hostilePic(sim, ship) {
+    if (!sim || !ship || !sim.playerFaction || ship.faction === sim.playerFaction || ship.faction === 'CIV') return null;
+    return hullPicture(sim, ship);
+  }
+  // What the panel was built for: the modules present and, for a hostile, what we hold on her, so a contact that
+  // becomes a track or a solution gets the panel that level allows.
+  function panelKey(pic) { return !!OD.Engagement + ':' + !!(OD.Damage && OD.Damage.report) + ':' + (pic ? pic.level + (pic.classKnown ? '+' : '') : 'ours'); }
+  function nearestOwn(sim, ship) {
+    let near = null, nd = Infinity;
+    for (const s of (sim.playerShips ? sim.playerShips() : [])) { if (s.destroyed || s === ship) continue; const d = U.dist(s.pos, ship.pos); if (d < nd) { nd = d; near = s; } }
+    return near;
+  }
+  // The range to a hostile as our plot has it, from one of our ships: the one asked for, else the ship the map's
+  // contact labels measure from (render.js lookout: the first of ours that is not a station), else the nearest.
+  // Below a solution the range runs to where the track puts her, with the track's range error; at a solution it is
+  // the truth and the error is 0.
+  function trackFix(sim, ship, pic, prefer) {
+    let tr = null;
+    if (OD.Sensors && typeof OD.Sensors.track === 'function' && !ship.destroyed) { try { tr = OD.Sensors.track(sim, sim.playerFaction, ship); } catch (e) { tr = null; } }
+    const ours = (s) => !!s && !s.destroyed && s.faction === sim.playerFaction;
+    const first = (sim.playerShips ? sim.playerShips() : []).find((x) => x.role !== 'station');
+    const from = ours(prefer) ? prefer : ours(first) ? first : nearestOwn(sim, ship);
+    if (!from) return null;
+    const full = !pic || pic.level === 'full';
+    const est = !full && tr && tr.est && tr.est.pos && isFinite(tr.est.pos.x) && isFinite(tr.est.pos.y) ? tr.est : null;
+    const at = est ? est.pos : ship.pos, vel = est && est.vel ? est.vel : ship.vel;
+    const r = U.sub(at, from.pos), d = U.len(r);
+    const c0 = d > 0 ? -U.dot(U.sub(vel, from.vel), U.norm(r)) : 0;
+    return { from, d, err: full || !tr ? 0 : (tr.rangeErr || tr.posErr || 0), closing: Math.abs(c0) < 0.05 ? 0 : c0 };
+  }
+  const two = (x) => Number(x.toPrecision(2));
+  // A hostile's panel says what our sensors hold on her where our own ship's says what the navigator plans: her
+  // orders are hers. The level, the ship of ours that holds her and the range from it with its error; at a
+  // solution, what the plume shows her doing.
+  function trackPanel(sim, ship, pic, fix, set) {
+    const word = pic.word || (pic.level === 'full' ? 'solution' : pic.level);
+    set('ostate', ship.destroyed ? 'lost' : word);
+    if (bound.ostate) bound.ostate.className = 'pill ' + (ship.destroyed ? '' : pic.level === 'full' ? 'good' : pic.level === 'track' ? 'warn' : 'crit');
+    const rng = fix ? (fix.err > 0 ? km(two(fix.d)) + ' ± ' + km(two(fix.err)) : '≈ ' + km(two(fix.d))) : '';
+    let text, sub = '';
+    if (ship.destroyed) text = 'She is destroyed.';
+    else if (pic.level === 'full') {
+      const g = ship.throttle > 0.02 && typeof ship.accel === 'function' ? (ship.accel() * ship.throttle) / 9.80665 : 0;
+      text = (fix ? fix.from.name + ' holds' : 'We hold') + ' a firing solution on her. ' + (ship.disabled ? 'She is disabled.' : g > 0 ? 'She is burning at ' + U.fmt.num(g, 2) + ' g.' : 'She is coasting.');
+    } else if (pic.level === 'track') {
+      text = fix ? fix.from.name + ' holds a track on her at ' + rng + '.' : 'We hold a track on her.';
+      sub = 'We know her class and see her radiators, nothing more.';
+    } else {
+      text = fix ? fix.from.name + ' has a bearing on her and a range of ' + rng + '.' : 'We have a bearing on her and a rough range.';
+      sub = 'No class and no picture until the track improves.';
+    }
+    set('navtext', text); set('navsub', sub);
+    if (bound.navsub) bound.navsub.hidden = !sub;
+  }
   // The fight, in one line under the picture: for our ship the threat line, the target with range and closing,
   // and the fire mode; for a hostile, what our track on her is and from which of our ships.
   function hullLiveLine(sim, ship, pic) {
@@ -1357,20 +1612,18 @@
       if (E && E.shipReadout) { try { const row = (E.shipReadout(ship) || []).find((x) => /^fire mode$/i.test(x.label || '')); if (row && row.value) bits.push('beams ' + row.value); } catch (e) { /* optional */ } }
       if (!bits.length) bits.push('no threats · no target');
     } else if (ship.faction !== 'CIV') {
-      // from the ship we command first, then the nearest of ours if that is someone else; a range under a
-      // solution is the plot's two figures with its error, never the truth
-      const mine = sim.playerShips ? sim.playerShips().filter((s) => !s.destroyed) : [];
+      // from the ship we command, and then from the nearest of ours if that is someone else; with none of ours
+      // selected, from the ship the map measures from. A range under a solution runs to where the track puts her, the plot's two figures with its
+      // error, never the truth (trackFix, as the ship panel has it)
       const sel = selected();
       const from = sel && sel.faction === sim.playerFaction && !sel.destroyed ? sel : null;
-      let near = null, nd = Infinity;
-      for (const s of mine) { const d = U.dist(s.pos, ship.pos); if (d < nd) { nd = d; near = s; } }
-      let err = 0;
-      if (pic.level !== 'full' && OD.Sensors && typeof OD.Sensors.track === 'function') { try { const tr = OD.Sensors.track(sim, sim.playerFaction, ship); if (tr) err = tr.rangeErr || tr.posErr || 0; } catch (e) { err = 0; } }
       const sig2 = (v) => { if (!isFinite(v) || v === 0) return 0; const m = Math.pow(10, Math.floor(Math.log10(Math.abs(v))) - 1); return Math.round(v / m) * m; };
-      const rng = (m) => pic.level === 'full' ? U.fmt.dist(m) : 'about ' + U.fmt.dist(sig2(m)) + (err > 0 ? ', ±' + U.fmt.dist(sig2(err)) : '');
+      const rng = (f) => pic.level === 'full' ? U.fmt.dist(f.d) : 'about ' + U.fmt.dist(sig2(f.d)) + (f.err > 0 ? ', ±' + U.fmt.dist(sig2(f.err)) : '');
       bits.push(pic.word || 'contact');
-      if (from) bits.push(rng(U.dist(from.pos, ship.pos)) + ' from us');
-      if (near && near !== from) bits.push(rng(nd) + ' from ' + near.name);
+      const f1 = trackFix(sim, ship, pic, from);
+      if (f1) bits.push(rng(f1) + (f1.from === from ? ' from us' : ' from ' + f1.from.name));
+      const near = nearestOwn(sim, ship);
+      if (from && near && f1 && near !== f1.from) { const f2 = trackFix(sim, ship, pic, near); if (f2) bits.push(rng(f2) + ' from ' + near.name); }
     }
     return bits.join('  ·  ');
   }
@@ -1385,12 +1638,84 @@
     const el = $('log');
     const d = document.createElement('div');
     d.className = 'line ' + (e.kind || '');
-    d.innerHTML = '<span class="t">' + U.fmt.clock(e.t) + '</span><span class="who">' + esc(e.speaker || '') + '</span><span class="msg">' + esc(e.text) + '</span>';
+    // the speaker column is one line wide; a name longer than it keeps the whole name on hover
+    d.innerHTML = '<span class="t">' + U.fmt.clock(e.t) + '</span><span class="who"' + (e.speaker ? ' title="' + esc(e.speaker) + '"' : '') + '>' + esc(e.speaker || '') + '</span><span class="msg">' + esc(nbPct(e.text)) + '</span>';
     el.appendChild(d);
     while (el.children.length > 80) el.removeChild(el.firstChild);
     el.scrollTop = el.scrollHeight;
   }
-  function resetLog(sim) { $('log').innerHTML = ''; logCount = 0; for (const e of sim.log) appendLog(e); logCount = sim.log.length; }
+  function resetLog(sim) { $('log').innerHTML = ''; logCount = 0; for (const e of sim.log) appendLog(e); logCount = sim.log.length; logFit(); }
+  // v15: the log follows its newest line, and a line scrolled partly out of its top read as half a line under the
+  // panel above it. While the log follows, such a line is hidden until it is whole again; scrolled back by hand,
+  // every line shows and the top edge fades as before.
+  // On a phone a hidden line left an empty band at the top of the box (40 px early in chapter 1), so there the lines
+  // are placed whole from the top of the box while it follows (phoneLogFit). The newest line is never hidden, even
+  // when it is taller than the box.
+  const phoneQuery = window.matchMedia ? window.matchMedia('(max-width: 900px)') : null;
+  const coarseQuery = window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
+  // A new width or text size rewraps the lines; a log that was following its newest line keeps following it.
+  let logFollowing = true;
+  function logFit(relaid) {
+    const el = $('log'); if (!el) return;
+    let follow = el.clientHeight > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 4;
+    if (relaid === true && logFollowing && !follow && el.clientHeight > 0) { el.scrollTop = el.scrollHeight; follow = true; }
+    logFollowing = follow;
+    el.classList.toggle('follow', follow);
+    phoneLogFit(el, follow);
+    if (!follow) { el.querySelectorAll('.line.cut').forEach((d) => d.classList.remove('cut')); return; }
+    const top = el.getBoundingClientRect().top + el.clientTop;
+    const lines = el.children;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const r = lines[i].getBoundingClientRect();
+      lines[i].classList.toggle('cut', i < lines.length - 1 && r.top < top - 0.5);
+      if (r.bottom <= top) break;
+    }
+  }
+  // v15, phone: while the log follows, the newest lines that fit whole start at the top of the box and the room left
+  // over sits under the newest line (as padding), so there is never an empty band over the first line and the box,
+  // and the ship panel above it, keep their height. Scrolled back by hand, the padding stays until the log follows
+  // again, so a small scroll does not snap back. Nothing is reset to measure, so a call from the scroll event
+  // changes nothing when nothing changed.
+  function phoneLogFit(el, follow) {
+    const phone = !!(phoneQuery && phoneQuery.matches);
+    const extra0 = el._padExtra || 0;
+    if (!phone) { if (extra0) { el.style.paddingBottom = ''; el._padExtra = 0; } return; }
+    if (!follow) return;
+    const cs = getComputedStyle(el);
+    const padT = parseFloat(cs.paddingTop), padB = parseFloat(cs.paddingBottom) - extra0;
+    // the lines' room: index.html sizes the phone log border-box, so the added padding stays inside its 110 px
+    const cap = parseFloat(cs.maxHeight) - (cs.boxSizing === 'border-box' ? padT + padB + (el.offsetHeight - el.clientHeight) : 0);
+    const content = el.scrollHeight - padT - padB - extra0;
+    let extra = 0;
+    if (cap > 0 && content > cap + 0.5) {
+      // layout px per screen px: large text zooms the HUD, and style lengths are in layout px
+      const box = el.getBoundingClientRect().height, k = box > 0 ? el.offsetHeight / box : 1;
+      const lines = el.children;
+      let h = 0;
+      for (let i = lines.length - 1; i >= 0; i--) { const lh = lines[i].getBoundingClientRect().height * k; if (h + lh > cap + 0.5) break; h += lh; }
+      if (h > 0) extra = Math.max(0, Math.floor((cap - h) * 10) / 10);
+    }
+    if (Math.abs(extra - extra0) > 0.05) { el.style.paddingBottom = extra ? (padB + extra) + 'px' : ''; el._padExtra = extra; }
+    const max = el.scrollHeight - el.clientHeight;
+    if (Math.abs(el.scrollTop - max) > 0.5) el.scrollTop = max;
+  }
+  // v15: the map key and the ship list share the left column (index.html gives the key a grid row of its own).
+  // The key folds to its header when the list would otherwise have to scroll, unless the player opened it, in which
+  // case the list scrolls; Hide keeps it folded, Show opens it again.
+  // On a phone (no ship list) the key sits folded at the top left of the map and opens over it on Show; that choice
+  // is not remembered, so every visit starts with the map clear.
+  let legendMode = 'auto', legendPhoneOpen = false;
+  function legendFit() {
+    const lg = $('legend'), fl = $('fleet'), fold = $('legendFold'); if (!lg) return;
+    let folded = legendMode === 'folded';
+    if (phoneQuery && phoneQuery.matches) folded = !legendPhoneOpen;
+    else if (legendMode === 'auto') {
+      lg.classList.remove('folded');
+      folded = !!(fl && fl.clientHeight > 0 && fl.scrollHeight > fl.clientHeight + 1);
+    }
+    lg.classList.toggle('folded', folded);
+    if (fold) { fold.textContent = folded ? 'Show' : 'Hide'; fold.setAttribute('aria-expanded', String(!folded)); fold.setAttribute('aria-label', folded ? 'Show the map key' : 'Hide the map key'); }
+  }
 
   // ------------------------------------------------------------------ hints & toasts
   let hintQueue = [], hintActive = null, hintAnchorEl = null;
@@ -1412,6 +1737,7 @@
     $('hintText').textContent = hintActive.text;
     $('hintStep').textContent = hintActive.step ? 'Step ' + hintActive.step[0] + ' of ' + hintActive.step[1] : 'Hint';
     $('hintSkip').hidden = !hintActive.step;
+    el.classList.toggle('tour', !!hintActive.step);
     // v13: a hint may carry one action, for the phone where the key it would name does not exist
     hintAction(hintActive.action);
     el.hidden = false;
@@ -1425,6 +1751,8 @@
       }
     }
     if (hintActive.mark && OD.Guide) OD.Guide.mark = { shipId: hintActive.mark, label: hintActive.markLabel || 'click' };
+    // a new step over an open card folds or unfolds with the room it has (bandLayout)
+    bandLayout();
   }
   // The hint's own button, built here so index.html keeps its markup and the page keeps no inline handler.
   let hintActBtn = null;
@@ -1445,17 +1773,52 @@
   const FULL_ROWS = /^(Beams in arc|On target|Through armour|Effects)$/;
   function skipTour() { hintQueue = hintQueue.filter((h) => !h.step); hintActive = null; nextHint(); }
   let toastTimer = null;
-  function toast(text, ms = 2600, speaker) {
+  function toast(text, ms = 2600, speaker, tag) {
     const el = $('toast');
-    if (speaker) { el.className = 'comms'; el.innerHTML = '<b>' + esc(speaker) + '</b>' + esc(text); } else { el.className = ''; el.textContent = text; }
+    if (speaker) { el.className = 'comms'; el.innerHTML = '<b>' + esc(speaker) + '</b>' + esc(text) + (tag ? '<span class="tag">' + esc(tag) + '</span>' : ''); } else { el.className = ''; el.textContent = text; }
     el.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, ms);
   }
 
   // ------------------------------------------------------------------ screens
+  // v15: every DOM screen but the hull view sits in the bridge console's frame, with the header strip naming it the
+  // way bridge.js names its own screens ('Bridge · Chapters'), so moving between the canvas console and a DOM
+  // screen keeps one look. opts.head overrides the name; opts.close = { id, label, run } puts a close key (Esc) in
+  // the strip for a long screen whose other close key is at the bottom.
+  const SCREEN_HEADS = { physics: 'Physics', help: 'How to play', campaign: 'Campaign', campend: 'Campaign', configurator: 'Ship configurator', skirmish: 'Skirmish',
+    menu: 'Main console', chapters: 'Chapters', briefing: 'Briefing', situation: 'Situation', hangar: 'Hangar', inspect: 'Hull view', pause: 'Paused', debrief: 'Debrief' };
+  function screenKeys(host, opts) {
+    const keys = host.querySelector('.scr-keys'); if (!keys) return;
+    const add = (label, aria, run, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'sm' + (cls ? ' ' + cls : ''); b.innerHTML = label; if (aria) b.setAttribute('aria-label', aria); b.addEventListener('click', run); keys.appendChild(b); return b; };
+    if (opts.close && typeof opts.close.run === 'function') {
+      const b = add(esc(opts.close.label || 'Close') + '<kbd>Esc</kbd>', null, opts.close.run, 'scr-close');
+      if (opts.close.id) b.id = opts.close.id;
+      b.dataset.esc = '';
+    }
+    // the same two keys the console's header carries: sound and text size
+    if (OD.Sound && typeof OD.Sound.setEnabled === 'function') {
+      const snd = add('', null, () => { const on = !!(OD.Sound.enabled == null ? true : OD.Sound.enabled); try { OD.Sound.setEnabled(!on); if (!on && OD.Sound.unlock) OD.Sound.unlock(); } catch (e) { /* optional */ } sndLabel(); });
+      const sndLabel = () => { const on = !!(OD.Sound.enabled == null ? true : OD.Sound.enabled); snd.textContent = 'SND ' + (on ? '●' : '○'); snd.setAttribute('aria-label', 'Sound ' + (on ? 'on: switch off' : 'off: switch on')); };
+      sndLabel();
+    }
+    const aa = add('AA', null, () => { UI.setTextSize(UI.textSize === 'large' ? 'normal' : 'large', true); aaLabel(); });
+    const aaLabel = () => aa.setAttribute('aria-label', 'Text size: ' + (UI.textSize === 'large' ? 'large, switch to normal' : 'normal, switch to large'));
+    aaLabel();
+  }
   function screen(id, html, opts = {}) {
     const host = $('screens');
-    host.innerHTML = '<div class="screen" id="' + id + '"><div class="card' + (opts.wide ? ' wide' : '') + '">' + html + '</div></div>';
+    const card = '<div class="card' + (opts.wide ? ' wide' : '') + '">' + html + '</div>';
+    if (id === 'hull' || opts.frame === false) host.innerHTML = '<div class="screen" id="' + id + '">' + card + '</div>';
+    else {
+      const head = opts.head || SCREEN_HEADS[id] || (id.charAt(0).toUpperCase() + id.slice(1));
+      host.innerHTML = '<div class="screen framed" id="' + id + '"><div class="scr-frame" aria-hidden="true"><i class="scr-rail"></i></div>' +
+        '<div class="scr-head"><span class="scr-mode"><span>Bridge · ' + esc(head) + '</span></span><span class="scr-keys"></span></div>' +
+        '<div class="scr-body">' + card + '</div></div>';
+      // the header strip already names the screen, so an eyebrow that says the same word again is dropped
+      const eb = host.querySelector('.card .eyebrow');
+      if (eb && eb.textContent.trim().toLowerCase() === String(head).trim().toLowerCase()) eb.hidden = true;
+      screenKeys(host, opts);
+    }
     UI.currentScreen = id;
     document.body.classList.add('screen-open');
     document.body.classList.toggle('hull-open', id === 'hull');
@@ -1469,22 +1832,27 @@
     const target = ship && ship.target ? sim.byId(ship.target) : null;
     const boxes = [];
     if (ship) {
-      boxes.push({ t: 'The rocket equation', p: 'Delta-v is the total speed change the tanks can buy. It comes from two numbers only: the exhaust velocity vₑ, and the ratio of full mass m₀ to dry mass m₁. The ratio sits inside a logarithm, so doubling a ship\u2019s delta-v costs far more than double the propellant.', f: 'Δv = vₑ · ln(m₀/m₁)\nvₑ = ' + U.fmt.speed(ship.exhaustVelocity) + '\nm₀ = ' + U.fmt.mass(ship.mass()) + '   m₁ = ' + U.fmt.mass(ship.dryMass) + '\nΔv = ' + U.fmt.dv(ship.deltaV()) + ' now, ' + U.fmt.dv(ship.deltaVFull()) + ' full\nspent this sortie: ' + U.fmt.dv(ship.stats.dvSpent) });
+      boxes.push({ t: 'The rocket equation', p: 'Delta-v is the total speed change the tanks can buy. It comes from two numbers only: the exhaust velocity vₑ, and the ratio of full mass m₀ to dry mass m₁. The ratio sits inside a logarithm, so doubling a ship\u2019s delta-v costs far more than double the propellant.', f: !hasDrive(ship)
+        ? 'Δv = vₑ · ln(m₀/m₁)\nno drive and no propellant: m₀ = m₁ = ' + U.fmt.mass(ship.dryMass) + ', so Δv = 0'
+        : 'Δv = vₑ · ln(m₀/m₁)\nvₑ = ' + U.fmt.speed(ship.exhaustVelocity) + '\nm₀ = ' + U.fmt.mass(ship.mass()) + '   m₁ = ' + U.fmt.mass(ship.dryMass) + '\nΔv = ' + U.fmt.dv(ship.deltaV()) + ' now, ' + U.fmt.dv(ship.deltaVFull()) + ' full\nspent this sortie: ' + U.fmt.dv(ship.stats.dvSpent) });
       // the figures are the ones the simulation is using now: a hurt drive scales the thrust, a wrecked one has none
       const a = ship.accelNominal(), tw = thrustWhy(ship), live = tw.live, fac = tw.fac;
       const aLine = live > 0
         ? 'a = F/m = ' + U.fmt.si(ship.thrust, 'N') + (fac < 0.995 ? ' × ' + Math.round(fac * 100) + ' %' + (tw.why ? ' (' + tw.why + ')' : '') : '') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(live)
         : tw.none + '\nrated a = F/m = ' + U.fmt.si(ship.thrust, 'N') + ' / ' + U.fmt.mass(ship.mass()) + ' = ' + U.fmt.accel(a);
-      boxes.push({ t: 'Thrust and acceleration', p: 'Acceleration a is thrust F divided by current mass m. The drive puts out the same force all through a burn, so as propellant burns off the ship accelerates harder. The flip time is how long it takes to swing 180° before a braking burn.', f: aLine + '\nwhen dry: ' + U.fmt.accel(ship.thrust / ship.dryMass) + '\nflip 180°: ' + U.fmt.time(OD.Autopilot.flipTimeFor(typeof OD.Autopilot.turnFactor === 'function' ? { angAccel: ship.angAccel * OD.Autopilot.turnFactor(ship), maxAngVel: ship.maxAngVel } : ship)) });
+      boxes.push({ t: 'Thrust and acceleration', p: 'Acceleration a is thrust F divided by current mass m. The drive puts out the same force all through a burn, so as propellant burns off the ship accelerates harder. The flip time is how long it takes to swing 180° before a braking burn.', f: !hasDrive(ship)
+        // v15: a hull without a drive has no burn to flip for and no tanks to run dry
+        ? 'no drive: F = 0, so a = 0 at any mass\nshe holds her orbit'
+        : aLine + (ship.propMass > 0 ? '\nwhen dry: ' + U.fmt.accel(ship.thrust / ship.dryMass) : '') + '\nflip 180°: ' + U.fmt.time(OD.Autopilot.flipTimeFor(typeof OD.Autopilot.turnFactor === 'function' ? { angAccel: ship.angAccel * OD.Autopilot.turnFactor(ship), maxAngVel: ship.maxAngVel } : ship)) });
     }
     if (ship && target) {
       const d = U.dist(ship.pos, target.pos), a = liveAccel(ship);
       const b = a > 0 ? P.brachistochrone(d, a) : null;
-      boxes.push({ t: 'Brachistochrone transfer', p: 'The quickest transfer a torch drive can fly. Burn toward the target for half the distance, flip, then burn against your motion for the other half. d is the range and a the acceleration. Time and delta-v both grow with the square root of the distance, so a target twice as far costs about 1.4 times as much of each.', f: 'range d = ' + U.fmt.dist(d) + (b ? '\nt = 2·√(d/a) = ' + U.fmt.time(b.time) + '   peak ' + U.fmt.speed(b.peakV) + '\nΔv = 2·√(d·a) = ' + U.fmt.dv(b.dv) + '\n\ncapped at a 1.5 km/s cruise: ' + U.fmt.time(P.transferWithBudget(d, a, 3000).time) + ' and ' + U.fmt.dv(Math.min(3000, b.dv)) + ' of Δv' : '\n' + thrustWhy(ship).none + ', and she cannot fly this transfer'), plot: true });
+      if (hasDrive(ship)) boxes.push({ t: 'Brachistochrone transfer', p: 'The quickest transfer a torch drive can fly. Burn toward the target for half the distance, flip, then burn against your motion for the other half. d is the range and a the acceleration. Time and delta-v both grow with the square root of the distance, so a target twice as far costs about 1.4 times as much of each.', f: 'range d = ' + U.fmt.dist(d) + (b ? '\nt = 2·√(d/a) = ' + U.fmt.time(b.time) + '   peak ' + U.fmt.speed(b.peakV) + '\nΔv = 2·√(d·a) = ' + U.fmt.dv(b.dv) + '\n\ncapped at a 1.5 km/s cruise: ' + U.fmt.time(P.transferWithBudget(d, a, 3000).time) + ' and ' + U.fmt.dv(Math.min(3000, b.dv)) + ' of Δv' : '\n' + thrustWhy(ship).none + ', and she cannot fly this transfer'), plot: true });
       const lag = P.lightLag(d);
-      boxes.push({ t: 'No stealth in space', p: 'A lit drive throws gigawatts of light and heat at a 3 K sky, so every sensor in the engagement sees it. What changes from ship to ship is how well they see you. Light takes time to cross the range as well. The box below says how far the target has moved since the light you are seeing left it.', f: 'drive plume: ' + U.fmt.power(0.5 * (ship.thrust || 0) * (ship.exhaustVelocity || 0) * ((OD.Sensors && OD.Sensors.T && OD.Sensors.T.plumeFraction) || 0.02)) + ' at full thrust\nlight lag to target: ' + (lag < 1 ? Math.round(lag * 1000) + ' ms' : lag.toFixed(1) + ' s') + '\ntarget has moved ' + U.fmt.dist(U.len(target.vel) * lag) + ' since that picture' });
+      boxes.push({ t: 'No stealth in space', p: 'A lit drive throws gigawatts of light and heat at a 3 K sky, so every sensor in the engagement sees it. What changes from ship to ship is how well they see you. Light takes time to cross the range as well. The box below says how far the target has moved since the light you are seeing left it.', f: (hasDrive(ship) ? 'drive plume: ' + U.fmt.power(0.5 * (ship.thrust || 0) * (ship.exhaustVelocity || 0) * ((OD.Sensors && OD.Sensors.T && OD.Sensors.T.plumeFraction) || 0.02)) + ' at full thrust' : 'drive plume: none, she has no drive') + '\nlight lag to target: ' + (lag < 1 ? Math.round(lag * 1000) + ' ms' : lag.toFixed(1) + ' s') + '\ntarget has moved ' + U.fmt.dist(U.len(target.vel) * lag) + ' since that picture' });
       const facet = facetSeen(ship, target);
-      boxes.push({ t: 'Facing armour', p: 'Armour is mass, and mass costs delta-v, so it is thickest on the nose that faces the enemy while closing. The tail carries the least and holds the drive. Braking toward an enemy points that tail at them.', f: 'nose ' + ship.armour.nose + ' cm   flank ' + ship.armour.flank + ' cm   tail ' + ship.armour.tail + ' cm\nthe target currently sees our ' + facet });
+      boxes.push({ t: 'Facing armour', p: 'Armour is mass, and mass costs delta-v, so it is thickest on the nose that faces the enemy while closing. The tail carries the least and holds the drive. Braking toward an enemy points that tail at them.', f: armourAllRound(ship) ? ship.armour.nose + ' cm on every facet\nthe target sees the same ' + ship.armour.nose + ' cm from any bearing' : 'nose ' + ship.armour.nose + ' cm   flank ' + ship.armour.flank + ' cm   tail ' + ship.armour.tail + ' cm\nthe target currently sees our ' + facet });
     }
     if (ship && OD.Sensors && typeof OD.Sensors.signature === 'function') {
       try {
@@ -1523,7 +1891,7 @@
     if (OD.Engagement && OD.Engagement.physicsNotes && ship) {
       for (const n of OD.Engagement.physicsNotes(ship, target) || []) boxes.push({ t: n.title, p: '', f: n.body });
     }
-    return boxes.map((b) => '<div class="box' + (b.plot ? ' wide' : '') + '"><h4>' + esc(b.t) + '</h4>' + (b.p ? '<p>' + esc(b.p) + '</p>' : '') + '<div class="f">' + esc(b.f) + '</div>' + (b.plot ? '<canvas id="physPlot" class="plot" width="640" height="220" aria-label="Transfer time and delta-v against distance"></canvas>' : '') + '</div>').join('');
+    return boxes.map((b) => '<div class="box' + (b.plot ? ' wide' : '') + '"><h4>' + esc(b.t) + '</h4>' + (b.p ? '<p>' + keepNums(esc(nbPct(b.p))) + '</p>' : '') + '<div class="f">' + keepNums(esc(nbPct(b.f))) + '</div>' + (b.plot ? '<canvas id="physPlot" class="plot" width="640" height="220" aria-label="Transfer time and delta-v against distance"></canvas>' : '') + '</div>').join('');
   }
   // Transfer time and delta-v against distance for this ship: the fast burn-flip-burn and the capped cruise.
   function drawTransferPlot(canvas, ship, range, vmax) {
@@ -1587,24 +1955,29 @@
     const target = ship && ship.target ? sim.byId(ship.target) : null;
     if (ship && target) drawTransferPlot($('physPlot'), ship, U.dist(ship.pos, target.pos), ship.order && ship.order.vmax);
   }
+  // the physics screen works through a hull whose numbers we have (ours, or a civilian's): with a hostile selected,
+  // her delta-v, heat and target are not ours to read, so it shows the first of our ships instead
+  function physicsShip(sim) { const s = selected(); return s && !hostilePic(sim, s) ? s : sim.playerShips()[0]; }
   function physics() {
     if (!game.sim) return;
-    const ship = selected() || game.sim.playerShips()[0];
+    const ship = physicsShip(game.sim);
     const prevWarp = game.warp; game.setWarp(0);
-    const el = screen('physics', '<div class="eyebrow">Physics</div><h2 class="title" style="font-size:32px">The numbers behind the ship</h2><p class="sub">' + (ship ? 'For ' + esc(ship.name) + (ship.target && game.sim.byId(ship.target) ? ' and its target ' + esc(game.sim.byId(ship.target).name) : ', with no target set: pick one to fill in the transfer, facing and light-lag cards') : 'No ship selected') + '. These are the values the simulation is using right now.</p><div class="phys" id="physBoxes"></div><div class="actions"><button class="primary" id="physClose">Back to the bridge</button></div>', { wide: true });
+    const back = () => { closeScreen(); game.setWarp(prevWarp || 1); };
+    const el = screen('physics', '<div class="eyebrow">Physics</div><h2 class="title">The numbers behind the ship</h2><p class="sub">' + (ship ? 'For ' + esc(ship.name) + (ship.target && game.sim.byId(ship.target) ? ' and her target ' + esc(game.sim.byId(ship.target).name) : ', with no target set: pick one to fill in the transfer, facing and light-lag cards') : 'No ship selected') + '. These are the values the simulation is using right now.</p><div class="phys" id="physBoxes"></div><div class="actions"><button class="primary" id="physClose">Back to the bridge</button></div>', { wide: true, close: { id: 'physCloseTop', label: 'Close', run: back } });
     refreshPhysics(game.sim, ship);
-    el.querySelector('#physClose').addEventListener('click', () => { closeScreen(); game.setWarp(prevWarp || 1); });
+    el.querySelector('#physClose').addEventListener('click', back);
   }
 
   function help(back) {
-    const el = screen('help', '<div class="eyebrow">How to play</div><h2 class="title" style="font-size:34px">How to command a ship</h2>' +
+    const close = () => { closeScreen(); if (back) back(); };
+    const el = screen('help', '<div class="eyebrow">How to play</div><h2 class="title">How to command a ship</h2>' +
       '<div class="help">' +
       '<section><h4>The idea</h4><p>Nothing in space slows down unless the drive burns to slow it. Every burn spends delta-v you cannot get back, and every burn and every shot puts heat into a sink that only the radiators can shed. You give the orders. The autopilot does the turning and the burning.</p></section>' +
       '<section><h4>Reading the bridge</h4><ul>' +
       '<li>The <b>Navigator</b> line at the top of the ship panel says what the ship is doing now and what it does next: turning, burning, flipping, braking or holding.</li>' +
       '<li>The <b>plotted path</b> on the map is that same plan: bright where the ship burns, dashed where it turns or coasts, blue-grey where it brakes tail-first. The first ring is the flip, the second the arrival.</li>' +
       '<li>The <b>delta-v gauge</b> is your fuel. The hatched part is what the current order will spend, and each order button shows its cost before you press it.</li>' +
-      '<li><b>Essentials</b> hides the numbers you do not need yet. <kbd>D</kbd> switches to <b>Full</b>, which adds mass, speed, heading, orbit, the systems bars and the gunnery rows.</li>' +
+      '<li><b>Essentials</b> hides the numbers you do not need yet. <kbd>D</kbd> switches to <b>Full</b>, which adds mass, speed, heading, altitude, the systems bars and the gunnery rows.</li>' +
       '</ul></section>' +
       '<section><h4>Controls</h4><ul>' +
       (window.innerWidth < 900
@@ -1626,14 +1999,14 @@
       '<li><b>Boarding</b>: hold within 3 km of a hostile at under 25 m/s relative speed. The party crosses in 90 seconds against a crew the size of yours, longer against a bigger one, and the ship changes hands. A crew more than twice yours throws it back.</li>' +
       '</ul></section>' +
       '<section><h4>Seeing and being seen</h4><ul>' +
-      '<li>Nothing hides in space, but a track has a quality. A <b>contact</b> is a bearing and a rough range, drawn as a ? inside a ring of where the ship might be. A <b>track</b> adds the class. A <b>solution</b> is good enough to fire on, so the beams and coilguns open up.</li>' +
+      '<li>Nothing hides in space, but a track has a quality. A <b>contact</b> is a bearing and a rough range, drawn as a ? on a line along that bearing. The ship is somewhere between the ticks at its ends. A <b>track</b> adds the class. A <b>solution</b> is good enough to fire on, so the beams and coilguns open up.</li>' +
       '<li>Signal falls with the square of range, so what you radiate sets how far off you are a solution. A cold coasting hull is about 1 MW and stays a contact until close. Hot radiators are tens of megawatts. A lit drive is gigawatts and hands everyone a solution. The <b>Signature</b> line in the panel says which you are.</li>' +
       '<li><b>Active</b> (<kbd>S</kbd>) buys a solution on everything in reach within seconds, and hands one to every ship out there. Staying passive costs you range or time instead.</li>' +
       '<li>When a real choice comes up, a <b>Decision</b> band opens above the log with two or three options, each with its cost in plain words and the navigator\'s pick lit. <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> answer it, and <kbd>Esc</kbd> leaves it for later. A repair, sick-bay or burn question carries a clock: leave it and the ship\'s routine settles it when the clock runs out.</li>' +
       '</ul></section>' +
       '<section><p>Hover any label for the number behind it. Large text and the panel you start in are on the main menu.</p></section></div>' +
-      '<div class="actions"><button class="primary" id="helpClose">Close</button></div>', { wide: true });
-    el.querySelector('#helpClose').addEventListener('click', () => { closeScreen(); if (back) back(); });
+      '<div class="actions"><button class="primary" id="helpClose">Close</button></div>', { wide: true, close: { id: 'helpCloseTop', label: 'Close', run: close } });
+    el.querySelector('#helpClose').addEventListener('click', close);
   }
 
   // ------------------------------------------------------------------ v11: signature, tracks and the decision band
@@ -1664,7 +2037,7 @@
     '#shipPanel.lost .section:not([data-v="syssec"]):not(.nav),#shipPanel.lost .vitals,#shipPanel.lost #pEng,#shipPanel.lost .facing-row,#shipPanel.lost .gauge-row{display:none}',
     '.facing-row{flex-wrap:wrap}.facing-row .v,.facing-row span:not(.k){white-space:normal;overflow-wrap:anywhere}',
     '#toast{font-family:var(--sans)}',
-    '#log{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12px);mask-image:linear-gradient(to bottom,transparent 0,#000 12px)}',
+    '#log:not(.follow){-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12px);mask-image:linear-gradient(to bottom,transparent 0,#000 12px)}',
     '@media (max-width:900px){#hint p{max-height:32vh;overflow:auto}}',
     '#decision .dc-opt.later{flex:0 0 auto;color:var(--dim);border-style:dashed;align-self:flex-start}',
     '#decision .dc-opt:hover,#decision .dc-opt:focus-visible{border-color:var(--ink);outline:none}',
@@ -1672,6 +2045,9 @@
     '@keyframes odDecision{0%{transform:translateY(8px);opacity:0}100%{transform:none;opacity:1}}',
     '@media (prefers-reduced-motion: reduce){#decision.new{animation:none}}',
     'body.decision-open #hint{display:none}',
+    // v15: on a laptop a tour step stays up above an open card (bandLayout stacks it there), so the first card in
+    // chapter 1 does not hide the step that explains the plot; the phone has room for one band, the card
+    '@media (min-width: 901px){body.decision-open #hint.tour{display:grid}}',
     '#decision .dc-why{display:none}',
     '#decision .dc-fade{display:none}',
     // v12: the hull view is a place to stand mid-fight. On a laptop it takes the map's rectangle only, so the
@@ -1686,7 +2062,10 @@
       'body.hull-open #decision .dc-teach{display:none}body.hull-open #decision.why .dc-teach{display:block}body.hull-open #decision .dc-why{display:inline-block}' +
       'body.hull-open #screens .card.wide{width:100%;margin:0;padding:0;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}' +
       'body.hull-open #screens .hull-title{font-size:22px;margin:0}body.hull-open #screens .hull-esc{display:inline}' +
-      'body.hull-open #screens .sub{margin:2px 0 0;font-size:12.5px;line-height:1.35;height:auto;max-height:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
+      // v15: the header lines never shrink under the view tabs; the class line runs the full width and stops at two
+      // lines (drawHullScreen puts the whole line at the top of the part list when it is cut)
+      'body.hull-open #screens .card.wide>.eyebrow,body.hull-open #screens .card.wide>.hull-title,body.hull-open #screens .card.wide>.sub{flex:none}' +
+      'body.hull-open #screens .sub{margin:2px 0 0;font-size:12.5px;line-height:1.35;height:auto;max-width:none;max-height:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
       'body.hull-open #screens .hullview{flex:1 1 auto;min-height:0;margin-top:8px;grid-template-rows:minmax(0,1fr)}' +
       'body.hull-open #screens .hullview>div:first-child{display:flex;flex-direction:column;min-height:0}' +
       'body.hull-open #screens .hullview .pic{flex:1 1 0;min-height:160px;height:auto}' +
@@ -1694,17 +2073,19 @@
       'body.hull-open #screens .hullview .kv{overflow:auto;min-height:0}body.hull-open #screens .actions{display:none}body.hull-open #toast{top:auto;bottom:calc(176px + var(--band-h,0px) - 3.4em)}}',
     // a short laptop screen with a card open: the part list and the class line give way so the picture keeps 140 px
     '@media (min-width: 901px) and (max-height: 860px){body.hull-open.decision-open #screens #hullParts,body.hull-open.decision-open #screens .sub{display:none}body.hull-open.decision-open #screens .hullview .pic{min-height:140px}}',
-    // the phone toast sits under an open band, not across it
-    '@media (max-width: 900px){body.decision-open #toast{top:calc(var(--band-bottom,62px) + 4px);bottom:auto}}',
+    // v15: a short laptop (1280×720) with a card open kept 28 px of map; the lesson goes behind Why?, as on a phone
+    '@media (min-width: 901px) and (max-height: 760px){#decision .dc-teach{display:none}#decision.why .dc-teach{display:block}#decision .dc-why{display:inline-block}}',
     '#decision .dc-more{display:none}',
     '@media (max-width: 900px){#decision.more .dc-more{display:block;position:sticky;bottom:0;order:6;text-align:center;font-size:11px;color:var(--ink-2);padding:2px 0 4px;pointer-events:none;background:var(--glass-3,rgba(5,9,15,0.97))}}',
     '#shipPanel .threats .kv .v{white-space:normal;overflow:visible;text-overflow:clip}',
-    '@media (max-width: 900px){#decision{position:static;grid-area:hint;margin:0 8px 4px;max-height:56vh;overflow:auto;display:flex;flex-direction:column;padding-bottom:0}#decision .dc-teach{display:none;order:4}#decision.why .dc-teach{display:block}#decision .dc-opts{order:3}#decision .dc-fade{display:block;order:5;position:sticky;bottom:0;flex:0 0 30px;margin-top:-12px;pointer-events:none;background:linear-gradient(rgba(5,9,15,0),var(--glass-3,rgba(5,9,15,0.97)) 70%)}#decision .dc-why{display:inline-block;margin-left:auto;font:inherit;font-size:11.5px;color:var(--ink-2);background:none;border:1px solid var(--line-2);padding:2px 8px;cursor:pointer;min-height:0;text-transform:none;letter-spacing:0}body.decision-open #shipPanel{display:none}}',
+    '@media (max-width: 900px){#decision{position:static;grid-area:hint;margin:0 8px 4px;max-height:56vh;overflow:auto;display:flex;flex-direction:column;padding-bottom:0}#decision .dc-teach{display:none;order:4}#decision.why .dc-teach{display:block}#decision .dc-opts{order:3}#decision .dc-fade{display:block;order:5;position:sticky;bottom:0;flex:0 0 30px;margin-top:-12px;pointer-events:none;background:linear-gradient(rgba(5,9,15,0),var(--glass-3,rgba(5,9,15,0.97)) 70%)}#decision .dc-why{display:inline-block;margin-left:auto;font:inherit;font-size:11.5px;color:var(--ink-2);background:none;border:1px solid var(--line-2);padding:2px 8px;cursor:pointer;min-height:0;text-transform:none;letter-spacing:0;position:relative}body.decision-open #shipPanel{display:none}' +
+      // the Why? key stays small beside the title, and its hit area runs 9 px above and below it (40 px for a thumb)
+      '#decision .dc-why::after{content:"";position:absolute;left:0;right:0;top:-9px;bottom:-9px}}',
     // v13: the hull view's party strip, always visible, above the scrolling part definitions
     '#hullParties{margin:6px 0 0;padding-left:8px;border-left:2px solid var(--line-2)}',
     '#hullParties>b{display:block;font-family:var(--display);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:2px}',
     '#hullParties>span{display:block;font-size:12.5px;line-height:1.4;color:var(--ink);white-space:pre-line;max-height:5.6em;overflow:auto}',
-    '.sw.contact{width:9px;height:9px;border:1px solid rgba(143,166,191,0.6);background:rgba(143,166,191,0.25);border-radius:50%;margin:0 6px} .sw.seen{border-top:2px dotted var(--blue)}',
+    '#legend .sw.contact{width:22px;height:12px;border:0;background:none} #legend .sw.contact svg{display:block} #legend .sw.seen{border-top:2px dotted var(--blue)}',
     '.fleet-row.fuzzy .bars{visibility:hidden}',
     '.fleet-row.lost .bars{visibility:hidden}',
     '#shipPanel .row{flex-wrap:wrap}',
@@ -1713,11 +2094,21 @@
     '@media (min-width:1000px){#help .help{column-count:2;column-gap:40px;column-fill:balance}#help .help p,#help .help li{max-width:none}#help .help section{margin:0 0 16px}}',
   ].join('\n');
   const LEGEND_V11 = [['contact', 'contact · where it might be'], ['seen', 'a solution on us from here in']];
+  // v15: the contact swatch is the map's own mark (render.js drawUncertainty): the '?' diamond on its error bar,
+  // a thin line broken round the diamond, a tick across each end and a faint strip as wide as the ticks, in grey
+  const SWATCH_SVG = {
+    contact: '<svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" fill="none" stroke="#9db4cc">' +
+      '<rect x="0.75" y="3" width="20.5" height="6" fill="#9db4cc" fill-opacity="0.12" stroke="none"/>' +
+      '<path d="M0.75 6H6M16 6H21.25" stroke-opacity="0.5" stroke-width="1"/>' +
+      '<path d="M0.75 3V9M21.25 3V9" stroke-opacity="0.8" stroke-width="1.5"/>' +
+      '<path d="M11 1.5L15.5 6L11 10.5L6.5 6Z" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<text x="11" y="8.3" font-size="6.5" font-family="IBM Plex Mono, ui-monospace, monospace" font-weight="600" text-anchor="middle" fill="#9db4cc" stroke="none">?</text></svg>',
+  };
   function installV11() {
     if (!document.getElementById('odV11css')) { const st = document.createElement('style'); st.id = 'odV11css'; st.textContent = V11_CSS; document.head.appendChild(st); }
     const lg = $('legend');
     if (lg && !lg.querySelector('.sw.contact')) {
-      for (const [cls, text] of LEGEND_V11) { const row = document.createElement('div'); row.className = 'lg-row'; row.innerHTML = '<i class="sw ' + cls + '"></i>' + esc(text); lg.appendChild(row); }
+      for (const [cls, text] of LEGEND_V11) { const row = document.createElement('div'); row.className = 'lg-row'; row.innerHTML = '<i class="sw ' + cls + '">' + (SWATCH_SVG[cls] || '') + '</i>' + esc(text); lg.appendChild(row); }
     }
     if (!$('decision')) {
       const hint = $('hint');
@@ -1734,20 +2125,46 @@
   function markTaught(kind) { const t = taughtSet(); if (t.has(kind)) return; t.add(kind); try { localStorage.setItem('od.taught', JSON.stringify(Array.from(t))); } catch (e) { /* per-viewer */ } }
   let dcSim = null, dcSeq = -1, dcId = null, dcTeachId = null, dcLastRefresh = 0, dcHeld = null, dcWarp = 0;
   let bandObs = null;
+  // v15 round 3: on a laptop the tour step stands above an open card. When the two would leave under FOLD_CLEAR px
+  // of map between the top bar and the step (1366×768, 1280×720), the step folds to its eyebrow line and its keys
+  // until the card closes. Every band stacks under the comms banner at the top of the map: while the banner shows
+  // and the stack would reach it, the card gives up height and scrolls, so no band covers another.
+  const FOLD_CLEAR = 200, BAND_GAP = 8;
   function bandLayout() {
     const el = $('decision'), hint = $('hint');
     if (!el || !hint) return;
-    const h = el.hidden ? 0 : el.offsetHeight;
-    hint.style.bottom = el.hidden ? '' : (176 + h + 8) + 'px';
+    const laptop = !(phoneQuery && phoneQuery.matches), cardUp = !el.hidden;
+    const stepUp = laptop && cardUp && !hint.hidden && hint.classList.contains('tour');
+    // measured at its natural height and with the step in full, then folded and capped as needed
+    if (el.style.maxHeight) { el.style.maxHeight = ''; el.style.overflowY = ''; }
+    hint.classList.remove('folded');
+    let h = cardUp ? el.offsetHeight : 0;
+    hint.style.bottom = cardUp ? (176 + h + BAND_GAP) + 'px' : '';
+    if (stepUp) {
+      const tb = $('topbar'), tt = $('toast');
+      let mapTop = tb ? tb.getBoundingClientRect().bottom : 0;
+      // the comms banner at the top of the map covers it too (1280×720 left 63 px)
+      if (tt && !tt.hidden) { const r = tt.getBoundingClientRect(); if (r.height > 0 && r.top < window.innerHeight * 0.4) mapTop = Math.max(mapTop, r.bottom); }
+      if (hint.getBoundingClientRect().top - mapTop < FOLD_CLEAR) hint.classList.add('folded');
+    }
+    const toast = $('toast');
+    if (laptop && cardUp && toast && !toast.hidden && !document.body.classList.contains('hull-open')) {
+      const tr = toast.getBoundingClientRect();
+      if (tr.height > 0 && tr.top < window.innerHeight * 0.4) {
+        const stackTop = el.getBoundingClientRect().top - (stepUp ? hint.offsetHeight + BAND_GAP : 0);
+        const over = tr.bottom + 6 - stackTop;
+        if (over > 0) { h = Math.max(120, h - over); el.style.maxHeight = h + 'px'; el.style.overflowY = 'auto'; hint.style.bottom = (176 + h + BAND_GAP) + 'px'; }
+      }
+    }
     // v12: the hull view ends above the band and the hint (--band-h) and the phone toast sits under the band
     // (--band-bottom)
     const st = document.body.style;
     const hh = hint.hidden ? 0 : hint.offsetHeight;
-    st.setProperty('--band-h', ((el.hidden ? 0 : h + 8) + (hint.hidden ? 0 : hh + 8)) + 'px');
+    st.setProperty('--band-h', ((cardUp ? h + BAND_GAP : 0) + (hh > 0 ? hh + BAND_GAP : 0)) + 'px');
     let bottom = 0;
-    if (!el.hidden) { const r = el.getBoundingClientRect(); const op = el.offsetParent; bottom = r.bottom - (op ? op.getBoundingClientRect().top : 0); }
+    if (cardUp) { const r = el.getBoundingClientRect(); const op = el.offsetParent; bottom = r.bottom - (op ? op.getBoundingClientRect().top : 0); }
     st.setProperty('--band-bottom', Math.round(bottom) + 'px');
-    if (!bandObs && typeof ResizeObserver === 'function') { bandObs = new ResizeObserver(() => bandLayout()); bandObs.observe(el); bandObs.observe(hint); }
+    if (!bandObs && typeof ResizeObserver === 'function') { bandObs = new ResizeObserver(() => bandLayout()); bandObs.observe(el); bandObs.observe(hint); if (toast) bandObs.observe(toast); }
   }
   function closeBand() {
     const el = $('decision'); if (!el) return;
@@ -1757,7 +2174,7 @@
     bandLayout();
   }
   function optionHtml(o) {
-    return '<button class="dc-opt' + (o.recommended ? ' rec' : '') + '" data-key="' + esc(o.key) + '"><kbd>' + esc(o.key) + '</kbd><b>' + esc(o.label) + '</b><small data-dk="' + esc(o.key) + '">' + esc(o.detail || '') + '</small></button>';
+    return '<button class="dc-opt' + (o.recommended ? ' rec' : '') + '" data-key="' + esc(o.key) + '"><kbd>' + esc(o.key) + '</kbd><b>' + esc(o.label) + '</b><small data-dk="' + esc(o.key) + '" data-t="' + esc(o.detail || '') + '">' + keepNums(esc(nbPct(o.detail || ''))) + '</small></button>';
   }
   // v13: Esc on a repair or a medical card hands the choice to the ship's routine, so the key says so. The
   // deadline decisions.js puts on the card counts down in sim time under it.
@@ -1786,15 +2203,15 @@
   function renderBand(sim, d, opened) {
     const el = $('decision'); if (!el) return;
     const ship = sim.byId(d.shipId);
-    $('dcEyebrow').textContent = 'Decision · ' + (d.kind || '') + (ship && ship.id !== UI.selected ? ' · ' + ship.name + ' (click to select)' : '');
+    $('dcEyebrow').textContent = 'Decision · ' + (d.kind || '') + (ship && ship.id !== UI.selected ? ' · ' + ship.name + ((coarseQuery && coarseQuery.matches) || window.innerWidth <= 900 ? ' (tap to select)' : ' (click to select)') : '');
     $('dcEyebrow').style.cursor = ship && ship.id !== UI.selected ? 'pointer' : '';
     $('dcEyebrow').onclick = ship && ship.id !== UI.selected ? () => { UI.select(ship.id); } : null;
-    $('dcTitle').textContent = d.title || '';
-    $('dcText').textContent = d.text || '';
+    setKept($('dcTitle'), d.title);
+    setKept($('dcText'), d.text);
     const teach = $('dcTeach');
     // the paragraph stays until the kind has been answered or dismissed once (marked in decisionKey), so a
     // question that opens and closes on its own does not spend the lesson
-    if (d.teach && (!taughtSet().has(d.kind) || dcTeachId === d.id)) { teach.textContent = d.teach; teach.hidden = false; dcTeachId = d.id; }
+    if (d.teach && (!taughtSet().has(d.kind) || dcTeachId === d.id)) { setKept(teach, d.teach); teach.hidden = false; dcTeachId = d.id; }
     else teach.hidden = true;
     const why = $('dcWhy'); if (why) why.hidden = teach.hidden;
     $('dcOpts').innerHTML = (d.options || []).map(optionHtml).join('') + laterHtml(sim, d);
@@ -1828,22 +2245,22 @@
       // another ship's question opens as the band too (worded in the third person by the decision layer, her
       // name in the eyebrow, the digits answer it); a toast says whose it is
       const ship = sim.byId(d.shipId);
-      if (opened && ship && UI.selected && ship.id !== UI.selected) toast((d.title || '').includes(ship.name) ? d.title : ship.name + ': ' + d.title, 4000);
+      if (opened && ship && UI.selected && ship.id !== UI.selected) decisionToast(sim, d, '', 4000);
       openFor(d, opened);
       dcLastRefresh = now;
     } else if (d && now - dcLastRefresh > 1000) {
       dcLastRefresh = now;
       try { if (typeof D.refresh === 'function') D.refresh(sim, d); } catch (e) { /* details keep their last text */ }
-      for (const o of d.options || []) { const s = document.querySelector('#dcOpts small[data-dk="' + o.key + '"]'); if (s && s.textContent !== (o.detail || '')) s.textContent = o.detail || ''; }
+      for (const o of d.options || []) { const s = document.querySelector('#dcOpts small[data-dk="' + o.key + '"]'); if (s && s.dataset.t !== (o.detail || '')) { s.dataset.t = o.detail || ''; s.innerHTML = keepNums(esc(nbPct(o.detail || ''))); } }
       // the deadline runs on the sim clock, so it counts down through a time warp as the fight does
       const dl = document.querySelector('#dcOpts small[data-dk="esc"]');
       if (dl) { const w = deadlineWords(sim, d); if (dl.textContent !== w) dl.textContent = w; }
       // the title and the sentence carry numbers too (hull left, seconds out): they follow the fight as the details do
       const tt = $('dcTitle'), tx = $('dcText');
-      if (tt && d.title && tt.textContent !== d.title) tt.textContent = d.title;
-      if (tx && d.text && tx.textContent !== d.text) tx.textContent = d.text;
+      if (tt && d.title) setKept(tt, d.title);
+      if (tx && d.text) setKept(tx, d.text);
       const te = $('dcTeach');
-      if (te && !te.hidden && d.teach && te.textContent !== d.teach) te.textContent = d.teach;
+      if (te && !te.hidden && d.teach) setKept(te, d.teach);
     }
     // on a phone the band scrolls: say so while there is more below the fold
     if (d) { const el = $('decision'); if (el && !el.hidden) el.classList.toggle('more', el.scrollHeight - el.scrollTop - el.clientHeight > 8); }
@@ -1860,9 +2277,19 @@
     try { D.choose(sim, d.id, key); } catch (e) { toast('That option is no longer available.', 2000); closeBand(); dcId = null; return true; }
     if (sim.flags) sim.flags.decisionAnswered = true;
     markTaught(d.kind); closeBand(); dcId = null;
-    toast(d.title + ' → ' + o.label, 2600);
+    decisionToast(sim, d, ' → ' + o.label, 2600);
     try { if (OD.Sound && OD.Sound.play) OD.Sound.play('confirm'); } catch (e) { /* optional */ }
     return true;
+  }
+  // v15: a card's line in the top banner is said the way every other line there is: the ship as the speaker, the
+  // title as the words, and the ships a fleet card speaks for as a tag ('JCS BASTION  Pick the range.  3 SHIPS').
+  function decisionToast(sim, d, extra, ms) {
+    const ship = sim && d ? sim.byId(d.shipId) : null;
+    let t = String((d && d.title) || ''), tag = '';
+    const m = / · (\d+ ships)$/.exec(t); if (m) { tag = m[1]; t = t.slice(0, m.index); if (!/[.?!]$/.test(t)) t += '.'; }
+    if (ship && ship.name && t.indexOf(ship.name + ': ') === 0) t = t.slice(ship.name.length + 2);
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    toast(t + (extra || ''), ms, ship ? ship.name : 'Decision', tag);
   }
   // S: the active sensor on the selected ship
   function toggleActive(ship) {
@@ -1883,6 +2310,8 @@
     if (!sig) return null;
     const word = sig.word || 'cold';
     const cap = word.charAt(0).toUpperCase() + word.slice(1);
+    // a hostile's panel: what she radiates, which is what we read off her; the lines below speak for our side
+    if (sim.playerFaction && ship.faction !== sim.playerFaction) return { text: (sig.active ? 'Active' : cap) + ' · ' + U.fmt.power(sig.total), cls: '', sig, sf };
     const any = sim.ships.some((h) => !h.destroyed && sim.isHostile(h, ship));
     let text, cls = '';
     if (sig.active) { text = 'Active: a firing solution for everyone in reach'; cls = 'crit'; }
@@ -1914,8 +2343,22 @@
     $('hintSkip').addEventListener('click', () => skipTour());
     $('btnSkip').addEventListener('click', () => { game.setWarp(64); toast('Running at 64×. Time drops back to 1× just before the next event.'); });
     installV8(); v8Keys(); installV11();
-    const lg = $('legend');
-    if (lg) { if (pref('od.legend', 'on') === 'off') lg.hidden = true; $('legendClose').addEventListener('click', () => { lg.hidden = true; try { localStorage.setItem('od.legend', 'off'); } catch (e) { /* per-viewer */ } }); }
+    const lg = $('legend'), fold = $('legendFold');
+    if (lg && fold) {
+      // 'off' (the key hidden before v15) now folds it to its header, so it can always come back
+      const p = pref('od.legend', '');
+      legendMode = p === 'off' ? 'folded' : p === 'open' ? 'open' : 'auto';
+      fold.addEventListener('click', () => {
+        if (phoneQuery && phoneQuery.matches) { legendPhoneOpen = lg.classList.contains('folded'); legendFit(); return; }
+        legendMode = lg.classList.contains('folded') ? 'open' : 'folded';
+        try { localStorage.setItem('od.legend', legendMode === 'folded' ? 'off' : 'open'); } catch (e) { /* per-viewer */ }
+        legendFit();
+      });
+      window.addEventListener('resize', () => legendFit());
+      legendFit();
+    }
+    window.addEventListener('resize', () => { logFit(true); bandLayout(); });
+    const logEl = $('log'); if (logEl) logEl.addEventListener('scroll', () => logFit(), { passive: true });
     // Touch: a tap on anything with a tooltip opens it; a tap elsewhere closes it.
     const noHover = window.matchMedia && window.matchMedia('(hover: none)').matches;
     if (noHover) document.addEventListener('click', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && tipKey !== t.dataset.tip) showTip(t.dataset.tip, e.clientX, e.clientY); else if (tipKey) { $('tooltip').hidden = true; tipKey = null; } });
@@ -1927,9 +2370,26 @@
   }
 
   // ---- v8 per-frame wiring: sound cues and ambient level, warp drop and a toast on every new launch at our ships ----
-  let v8Seq = 0, v8Sim = null, v8LastToast = -1e9;
+  let v8Seq = 0, v8Sim = null, v8LastToast = -1e9, v8Salvo = null;
+  // v15: several hulls launching at one of ours in the same moment raised one 'incoming' event each, and the banner
+  // showed only the last ('3 interceptors inbound' while the map read 32). The banner now adds up every salvo at each
+  // of our ships launched within its 6 s window and says the total, the number of launching ships and the shortest
+  // time out. The count and the time are read back from the event's own words (engagement.js salvo line).
+  const INBOUND_RE = /^(\d+) interceptors? inbound on .*?(?:, ((?:\d+h )?(?:\d+m )?\d+s) out)?\.$/;
+  function secsOf(t) { const m = /^(?:(\d+)h )?(?:(\d+)m )?(\d+)s$/.exec(t || ''); return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3]) : Infinity; }
+  function salvoText(sim, byShip) {
+    const list = Array.from(byShip.entries()).map(([id, k]) => Object.assign({ ship: sim.byId(id) }, k)).filter((k) => k.ship && k.n > 0).sort((a, b) => b.n - a.n);
+    if (!list.length) return '';
+    const darts = (n) => n + (n === 1 ? ' interceptor' : ' interceptors');
+    const first = list.reduce((m, k) => (k.eta < m.eta ? k : m), list[0]);
+    const top = list[0], one = list.length === 1 && top.from.size <= 1;
+    const out = isFinite(first.eta) ? (one ? ', ' : ', the first ') + first.etaText + ' out.' : '.';
+    if (list.length === 1) return darts(top.n) + ' inbound on ' + top.ship.name + (top.from.size > 1 ? ' from ' + top.from.size + ' ships' : '') + out;
+    const rest = list.slice(1), restN = rest.reduce((a, k) => a + k.n, 0);
+    return darts(top.n) + ' inbound on ' + top.ship.name + ' and ' + restN + (rest.length === 1 ? ' on ' + rest[0].ship.name : ' on ' + rest.length + ' other ships') + out;
+  }
   function v8Frame(sim, now) {
-    if (v8Sim !== sim) { v8Sim = sim; v8Seq = (sim.eng && sim.eng.eventSeq) || 0; v8LastToast = -1e9; }
+    if (v8Sim !== sim) { v8Sim = sim; v8Seq = (sim.eng && sim.eng.eventSeq) || 0; v8LastToast = -1e9; v8Salvo = null; }
     if (OD.Sound) {
       try {
         if (OD.Sound.watch) OD.Sound.watch(sim);
@@ -1941,17 +2401,29 @@
     const n = Math.min(eng.eventSeq - v8Seq, eng.events.length);
     const fresh = eng.events.slice(eng.events.length - n);
     v8Seq = eng.eventSeq;
-    let alert = null;
+    let alert = null, inbound = 0;
     for (const ev of fresh) {
       const ship = ev.shipId ? sim.byId(ev.shipId) : null;
       const from = ev.fromId ? sim.byId(ev.fromId) : null;
       const atOurs = ev.kind === 'incoming' && ship && ship.faction === sim.playerFaction;
       const hostileLaunch = ev.kind === 'launch' && ((from && from.faction !== sim.playerFaction) || (ship && ship.faction !== sim.playerFaction && !from));
       if (atOurs || hostileLaunch) alert = ev;
+      const m = atOurs ? INBOUND_RE.exec(ev.text || '') : null;
+      if (m) {
+        if (!v8Salvo || now - v8Salvo.at > 6000) v8Salvo = { at: now, byShip: new Map() };
+        const k = v8Salvo.byShip.get(ship.id) || { n: 0, eta: Infinity, etaText: '', from: new Set() };
+        k.n += +m[1]; inbound += +m[1];
+        const eta = secsOf(m[2]); if (eta < k.eta) { k.eta = eta; k.etaText = m[2]; }
+        if (ev.fromId) k.from.add(ev.fromId);
+        v8Salvo.byShip.set(ship.id, k);
+      }
     }
     if (!alert) return;
     if (game.warp > 1) { if (game.pullWarp) game.pullWarp(1); else game.setWarp(1); }
-    if (now - v8LastToast > 6000) { v8LastToast = now; toast(alert.text || 'Incoming.', 4500); }
+    // a salvo at one of ours updates the banner in its window with the running total; anything else waits 6 s
+    const total = inbound ? salvoText(sim, v8Salvo.byShip) : '';
+    if (total) { v8LastToast = now; toast(total, 4500); }
+    else if (now - v8LastToast > 6000) { v8LastToast = now; toast(alert.text || 'Incoming.', 4500); }
   }
   function v8Keys() {
     const unlock = () => { try { if (OD.Sound && OD.Sound.unlock) OD.Sound.unlock(); } catch (e) { /* optional */ } };
@@ -1972,11 +2444,13 @@
     try { v11Frame(sim, now); } catch (e) { /* the band is optional */ }
     $('clock').textContent = U.fmt.clock(sim.time);
     try { const ls = selected(); const sp = $('shipPanel'); if (sp) sp.classList.toggle('lost', !!(ls && (ls.destroyed || ls.captured))); } catch (e) { /* cosmetic */ }
-    if (sim.log.length !== logCount) { for (let i = logCount; i < sim.log.length; i++) appendLog(sim.log[i]); logCount = sim.log.length; }
+    if (sim.log.length !== logCount) { for (let i = logCount; i < sim.log.length; i++) appendLog(sim.log[i]); logCount = sim.log.length; logFit(); }
     while (sim.hints.length) showHint(sim.hints.shift());
     if (hintActive && hintActive.until && hintActive.until(sim)) nextHint();
     // a plain hint does not hold the band for ever while others wait behind it: ninety seconds, then the next
     else if (hintActive && !hintActive.step && hintQueue.length && hintActive._shownAt != null && sim.time - hintActive._shownAt > 90) nextHint();
+    // a hint that quotes a live number keeps it current
+    else if (hintActive && typeof hintActive.refresh === 'function') { let t = null; try { t = hintActive.refresh(sim); } catch (e) { t = null; } const el = $('hintText'); if (t && el && el.textContent !== t) { el.textContent = t; hintActive.text = t; } }
     if (UI.currentScreen === 'hull') drawHullScreen(sim, now);
     if (now - lastRefresh < 120) return;
     lastRefresh = now;
@@ -1990,13 +2464,15 @@
       $('btnSkip').hidden = !ev || ev.t < 20;
     }
     updateObjectives(sim);
-    if (UI.currentScreen === 'physics' && $('physBoxes') && now - lastPhysRefresh > 600) { lastPhysRefresh = now; refreshPhysics(sim, selected() || sim.playerShips()[0]); }
+    if (UI.currentScreen === 'physics' && $('physBoxes') && now - lastPhysRefresh > 600) { lastPhysRefresh = now; refreshPhysics(sim, physicsShip(sim)); }
     if (tipKey && typeof TIPS[tipKey] === 'function') tipRefresh();
   }
 
   // The next thing the selected ship's plan does: {name, t (seconds from now)} or null.
   function nextEvent(sim, ship) {
     if (!ship || !OD.Guide) return null;
+    // a hostile's flip and arrival are her orders, which our sensors do not give
+    if (hostilePic(sim, ship)) return null;
     const p = OD.Guide.plan(sim, ship);
     if (!p.active) return null;
     const list = [['flip', p.flip], ['braking', p.brake], ['arrival', p.arrive], ['impact', p.crash]].map(([n, e]) => [n, OD.Guide.eta(sim, p, e)]).filter((x) => x[1] != null && x[1] > 1.5).sort((a, b) => a[1] - b[1]);
@@ -2009,9 +2485,9 @@
     selected: null, currentScreen: null, detail: 'essentials',
     select(id) { UI.selected = id; if (id && game.sim) { const s = game.sim.byId(id); if (s) updatePanel(s); } else updatePanel(null); },
     setDetail(v, persist) { UI.detail = v === 'full' ? 'full' : 'essentials'; $('shipPanel').dataset.detail = UI.detail; if (persist) { try { localStorage.setItem('od.detail', UI.detail); } catch (e) { /* per-viewer */ } } const s = selected(); if (s) updatePanel(s); },
-    setTextSize(v, persist) { UI.textSize = v === 'large' ? 'large' : 'normal'; document.documentElement.dataset.text = UI.textSize; if (persist) { try { localStorage.setItem('od.text', UI.textSize); } catch (e) { /* per-viewer */ } } },
+    setTextSize(v, persist) { UI.textSize = v === 'large' ? 'large' : 'normal'; document.documentElement.dataset.text = UI.textSize; if (persist) { try { localStorage.setItem('od.text', UI.textSize); } catch (e) { /* per-viewer */ } } if (game) { legendFit(); logFit(true); } },
     reset() { panelShip = null; fleetKey = ''; bound = {}; hintQueue = []; hintActive = null; $('hint').hidden = true; closeBand(); dcId = null; dcSim = null; if (hintAnchorEl) { hintAnchorEl.classList.remove('glow'); hintAnchorEl = null; } if (OD.Guide) OD.Guide.mark = null; UI.selected = null; $('shipPanel').innerHTML = '<div class="empty">Click one of your ships to take command, or pick it from the fleet list.</div>'; $('fleetList').innerHTML = ''; $('objList').innerHTML = ''; },
-    showHud(v) { $('hud').hidden = !v; },
+    showHud(v) { $('hud').hidden = !v; if (v) legendFit(); },
     setTitle(mode, name) { $('modeLabel').textContent = mode; $('missionName').textContent = name; },
   };
   OD.UI = UI;

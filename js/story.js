@@ -5,6 +5,10 @@
   const U = OD.U, P = OD.P;
   const B = P.bodies;
   const km = (v) => v * 1000;
+  // v15: a touch screen taps and has no shift key or Tab; a narrow screen puts the ship panel under the map.
+  // The verb follows the pointer (a landscape tablet is wide and still taps), the layout words follow the width.
+  const narrow = () => typeof window !== 'undefined' && window.innerWidth < 900;
+  const touch = () => { if (typeof window === 'undefined') return false; try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true; } catch (e) { /* no media queries */ } return window.innerWidth < 900; };
 
   const say = (speaker, text) => ({ speaker, text, kind: 'comms' });
   const logAt = (time, speaker, text) => ({ when: { time }, actions: [{ log: { speaker, text } }] });
@@ -181,8 +185,8 @@
             } }, { log: { speaker: 'Navigation', text: 'She reaches the surface in about two hours if nobody burns. The red circle is where.' } }] },
             { when: (sim) => { const mk = sim.markers.find((x) => x.id === 'impact'); if (mk && sim.flags.impactT != null) { const left = sim.flags.impactT - sim.time; mk.label = 'Long Meridian comes down here' + (left > 0 ? ' in ' + U.fmt.time(left) : ''); } return false; }, actions: [] },
             // Guided tour, six steps.
-            { when: { time: 1 }, actions: [{ hint: { id: 't2', step: [1, 5], text: (typeof window !== 'undefined' && window.innerWidth < 900) ? 'JCV Long Meridian is falling toward Callisto with no drive. Tap her on the map to make her Larkspur\'s target. Larkspur is your ship, her panel is below the map, and every order she takes goes to whatever she has targeted.' : 'JCV Long Meridian is falling toward Callisto with no drive. Click her on the map to make her Larkspur\'s target. Larkspur is your ship, her panel is on the right, and every order she takes goes to whatever she has targeted.', mark: 'meridian', markLabel: (typeof window !== 'undefined' && window.innerWidth < 900) ? 'tap to target' : 'click to target', until: (sim) => { const s = sim.byId('larkspur'); return s && s.target === 'meridian'; } } }] },
-            { when: (sim) => { const s = sim.byId('larkspur'); return s && s.target === 'meridian'; }, actions: [{ hint: { id: 't3', step: [2, 5], text: 'The Intercept button now reads about 18 minutes and 12 km/s, out of the 51 km/s in Larkspur\'s tanks. Press Intercept, or the I key. The autopilot points the nose at her and burns, turns round halfway, and burns the other way to stop alongside her.', anchor: '[data-order="intercept"]', until: (sim) => sim.flags.orderedIntercept } }] },
+            { when: { time: 1 }, actions: [{ hint: { id: 't2', step: [1, 5], text: 'JCV Long Meridian is falling toward Callisto with no drive. ' + (touch() ? 'Tap' : 'Click') + ' her on the map to make her Larkspur\'s target. Larkspur is your ship, her panel is ' + (narrow() ? 'below the map' : 'on the right') + ', and every order she takes goes to whatever she has targeted.', mark: 'meridian', markLabel: touch() ? 'tap to target' : 'click to target', until: (sim) => { const s = sim.byId('larkspur'); return s && s.target === 'meridian'; } } }] },
+            { when: (sim) => { const s = sim.byId('larkspur'); return s && s.target === 'meridian'; }, actions: [{ hint: { id: 't3', step: [2, 5], text: 'The Intercept button now reads about 18 minutes and 12 km/s, out of the 51 km/s in Larkspur\'s tanks. ' + (touch() ? 'Tap Intercept.' : 'Press Intercept, or the I key.') + ' The autopilot points the nose at her and burns, turns round halfway, and burns the other way to stop alongside her.', anchor: '[data-order="intercept"]', until: (sim) => sim.flags.orderedIntercept } }] },
             { when: (sim) => sim.flags.orderedIntercept, actions: [{ hint: { id: 't4', step: [3, 5], text: 'Larkspur is burning, and her plotted path is drawn ahead of her. The bright part is the burn. The ring is where she flips. The blue-grey part is braking tail-first. Press 16\u00d7 or Skip ahead to run the clock. Time drops back to 1\u00d7 by itself for the flip and the arrival, so you will not miss them.', anchor: '#warp', until: (sim) => !!sim.flags.flipHint } }] },
             { when: (sim) => { const s = sim.byId('larkspur'); return s && s.order.type === 'intercept' && s.stats.dvSpent > 1500 && Math.abs(U.angleDiff(s.cmdHeading, s.heading)) > 2.5 && !sim.flags.flipHint; }, actions: [{ flag: 'flipHint' }, { log: { speaker: 'Navigation', text: 'Flip complete. We are braking tail-first from here.' } }, { hint: { id: 't5', step: [4, 5], text: 'Halfway. The nose has swung round and the drive now faces Long Meridian, so from here every second takes speed off instead of adding it. Watch the delta-v bar in the panel. The hatched part is what the rest of the plan still costs, and it shrinks as she pays.', anchor: '#shipPanel', until: (sim) => sim.objectives[0].done } }] },
             { when: { objective: 'rv' }, actions: [{ fn: (sim) => { const m = sim.byId('meridian'); if (m) { m.systems.drive = 1; if (OD.Damage && OD.Damage.repair) { try { OD.Damage.repair(m, 1); } catch (e) { /* the tanker flies either way */ } } m.faction = 'JC'; m.player = true; m.ai = false; m.order = { type: 'hold' }; m.target = 'valhalla'; } sim.markers = sim.markers.filter((x) => x.id !== 'impact'); if (OD.Game && OD.Game.sim === sim) OD.Game.select('meridian'); } }, { log: { speaker: 'JCV Long Meridian', text: 'Larkspur, your engineers have our drive back. She is heavy and slow, and she is yours to steer.' } }, { activate: 'home' }, { hint: { id: 't6', step: [5, 5], text: 'Long Meridian has her drive back. She is selected now, with Valhalla Station already her target, so press Intercept. She is a freighter at 2.5 m/s\u00b2 against Larkspur\'s 13, so the trip is slow. Skip ahead runs the clock to the next event.', anchor: '[data-order="intercept"]', until: (sim) => { const m = sim.byId('meridian'); return m && m.order.type === 'intercept'; } } }] },
@@ -261,7 +265,7 @@
               const s = sim.byId('larkspur'), t = sim.byId('sabre');
               const R = s && t ? kmAbout(U.dist(s.pos, t.pos)) : '1 000 km';
               return { id: 'h1', anchor: '#shipPanel',
-                text: 'Sabre is the ? on the map, ' + R + ' out. A contact is a bearing and a rough range, and the ring is where she might be. ' + ((typeof window !== 'undefined' && window.innerWidth < 900) ? 'Tap' : 'Click') + ' her to make her the target. The Track row then grades our picture of her, from contact, to track, to a solution good enough to aim by.',
+                text: 'Sabre is the ? on the map, ' + R + ' out. A contact is a bearing and a rough range. She is somewhere on the line drawn through the ?. ' + (touch() ? 'Tap' : 'Click') + ' her to make her the target. The Track row then grades our picture of her, from contact, to track, to a solution good enough to aim by.',
                 until: (s2) => { const a = s2.byId('larkspur'); return (a && a.target === 'sabre' && s2.time > 8) || s2.time > 240; } };
             }),
             hintFrom((sim) => sim.time > 12 && trackQ(sim, 'sabre') < 2.7, (sim) => {
@@ -272,7 +276,7 @@
             }),
             // The band's keys are their own hint, on the first card the navigator raises.
             hintAt((sim) => hasDecision(sim), 'h1k', 'The navigator has put a decision on the band. Keys 1, 2 and 3 answer it, Esc leaves it for later, and the lit option is her own pick.', '#decision', (sim) => !!sim.flags.decisionAnswered || sim.time > 900),
-            hintAt((sim) => trackQ(sim, 'sabre') >= 2.7 && sim.time > 20, 'h1c', (typeof window !== 'undefined' && window.innerWidth < 900) ? 'We have a solution on Sabre, so the beams and the coilgun can aim. Hold a finger on her to keep range, or tap her and press Keep range in the panel, and Larkspur holds her doctrine range of 250 km.' : 'We have a solution on Sabre, so the beams and the coilgun can aim. Right-click her to keep range, and Larkspur holds her doctrine range of 250 km.', '#shipPanel', (sim) => sim.time > 600 || trackQ(sim, 'sabre') < 2.7),
+            hintAt((sim) => trackQ(sim, 'sabre') >= 2.7 && sim.time > 20, 'h1c', touch() ? 'We have a solution on Sabre, so the beams and the coilgun can aim. Hold a finger on her to keep range, or tap her and press Keep range in the panel, and Larkspur holds her doctrine range of 250 km.' : 'We have a solution on Sabre, so the beams and the coilgun can aim. Right-click her to keep range, and Larkspur holds her doctrine range of 250 km.', '#shipPanel', (sim) => sim.time > 600 || trackQ(sim, 'sabre') < 2.7),
             hintAt((sim) => trackQ(sim, 'sabre') >= 2.7 && sim.time > 45, 'h1e', 'The "They see" row names the armour face Sabre is looking at. Larkspur carries 20 cm on the nose and 4 on the tail, so keep the nose to her.', '#shipPanel', (sim) => sim.time > 700 || trackQ(sim, 'sabre') < 2.7),
             hintFrom((sim) => seenQ(sim, 'larkspur') >= 2.7 && sim.time > 20, (sim) => {
               const R = theirBurnThrough(sim, 'larkspur', 'sabre');
@@ -378,10 +382,10 @@
       n: 3, id: 'radiator-weather', title: 'Radiator Weather', location: 'Europa, Conamara Station', date: '19 April 2211',
       brief: [
         'You are over Europa with JCS Larkspur and the frigate JCS Anselm. Conamara Station is the ice farm that supplies half of Ganymede with water, and two Inner Systems Authority frigates have parked over it.',
-        'They are not shooting. With hostiles that close, Conamara has kept its radiators stowed for nine hours and its heat sink is at 88 per cent. In about an hour it is full, and then the station has to extend the radiators under their beams. Break the siege.',
+        'They have held their fire for nine hours, waiting for the sink to fill. With hostiles that close, Conamara has kept its radiators stowed all that time, and its heat sink is at 88 per cent. In about an hour it is full, and then the station has to extend the radiators under their beams. They open fire on the station as soon as you arrive. Break the siege.',
         'The same clock runs on your own ships. Radiators only shed heat while they are out, and while they are out they are the thinnest thing on the hull. Every minute with them stowed fills your sink. A full sink holds the drive to a quarter and stops every mount, point defence included, until it drains.',
       ],
-      comms: [say('Conamara Station', 'Compact ships, Conamara. We are at eighty-eight per cent on the sink and we can hold about an hour. After that we extend the radiators and hope those two are busy.')],
+      comms: [say('Conamara Station', 'Compact ships, Conamara. They will open fire on us now that you are here. The sink is at eighty-eight per cent, so we can keep the radiators in for about an hour. After that we have to extend them under their beams.')],
       // Either frigate can end adrift, wrecked, taken or driven off, so the line names each one's ending.
       get victory() {
         const sim = endSim('Radiator Weather');
@@ -419,10 +423,10 @@
             { id: 'n', text: 'Neutralise both Authority frigates', type: 'neutralize', targets: ['isa1', 'isa2'] },
             { id: 'p', text: 'Conamara Station survives', type: 'protect', ship: 'conamara' },
           ],
-          intro: [say('Conamara Station', 'Compact ships, Conamara. We are at eighty-eight per cent on the sink and we can hold about an hour. After that we extend the radiators and hope those two are busy.')],
+          intro: [say('Conamara Station', 'Compact ships, Conamara. They will open fire on us now that you are here. The sink is at eighty-eight per cent, so we can keep the radiators in for about an hour. After that we have to extend them under their beams.')],
           triggers: [
-            hintAt({ time: 2 }, 'h1', 'You have two ships this time, Larkspur and Anselm. Tab switches between them, and shift-click adds a ship to the selection so one order goes to both.', '#fleetList'),
-            hintAt({ time: 20 }, 'h2', 'The Heat section shows your sink filling. Radiators only shed heat while they are out, so extend them with X whenever nothing is shooting at you, and stow them before a beam can reach them.', '#shipPanel'),
+            hintAt({ time: 2 }, 'h1', touch() ? 'You have two ships this time, Larkspur and Anselm. Tap one of them on the map to select her. An order goes only to the ship you have selected, so give each ship her own.' : 'You have two ships this time, Larkspur and Anselm. Tab switches between them, and shift-click adds a ship to the selection so one order goes to both.', '#fleetList'),
+            hintAt({ time: 20 }, 'h2', 'The Heat section shows your sink filling. Radiators only shed heat while they are out, so extend them' + (touch() ? '' : ' with X') + ' whenever nothing is shooting at you, and stow them before a beam can reach them.', '#shipPanel'),
             hintAt((sim) => sim.time > 60 && hasAction(sim, 'aim_radiators') && hostileRadiatorsOut(sim, km(450)), 'h3', 'That frigate has her radiators out to keep her own sink down. Press T to set the aim point to Radiators. Radiators are the thinnest part of any hull, and a frigate that loses hers has to sit in her own heat.', '#pEng'),
             { when: (sim) => sim.objectives[0].done, actions: [{ fn: (sim) => { const st = sim.byId('conamara'); if (st) { st.radiators.auto = true; st.radiators.deployed = true; } } }, { log: { speaker: 'Conamara Station', text: 'Radiators extending. Sink is falling already. Thank you, Compact.' } }] },
           ],
@@ -474,7 +478,7 @@
           ],
           intro: [say('JCS Bastion', 'Bastion is with you. She turns slowly, so she holds a straight line and takes the hits. You two do the jinking.')],
           triggers: [
-            hintAt({ time: 2 }, 'h1', 'Coriolis will hold 600 km all day, and at that range your beams barely mark her armour. Shift-click all three ships, click Coriolis, type 200 in the Range box and press Keep range, so they hold her together. Turn jinking on for Larkspur and Anselm with J, so her slugs arrive where you were.', '#shipPanel'),
+            hintAt({ time: 2 }, 'h1', touch() ? 'Coriolis will hold 600 km all day, and at that range your beams barely mark her armour. Give each of your three ships the same order, one ship at a time: tap the ship, tap Coriolis, type 200 in the Range box and tap Keep range. Then they hold her together. Turn Jink on for Larkspur and Anselm, so her slugs arrive where you were.' : 'Coriolis will hold 600 km all day, and at that range your beams barely mark her armour. Shift-click all three ships, click Coriolis, type 200 in the Range box and press Keep range, so they hold her together. Turn jinking on for Larkspur and Anselm with J, so her slugs arrive where you were.', '#shipPanel'),
             hintAt({ time: 40 }, 'h2', 'Coriolis fires her slugs at where you will be, not at where you are. Press P and read the slug flight time at this range. At 300 km it is 67 s, and any burn inside that time takes you off the aim point.', '#btnPhysics'),
             hintAt((sim) => sim.time > 60 && trackQ(sim, 'coriolis') < 2.5, 'h2b', 'We have a track on Coriolis but not a solution, so our coilgun cannot lead her. Hers cannot lead us either. That is why she is quiet. Closing sharpens the picture for both sides. The active sensor (S) buys a solution at once and hands her one on us.', '#shipPanel', (sim) => trackQ(sim, 'coriolis') >= 2.5 || sim.time > 500),
             hintAt((sim) => inbound(sim, 'slug'), 'h3', 'Slugs are inbound. Each one on the map carries its time of arrival, and reads "will miss" once its target has moved off the aim point. The Threats band at the top of the panel counts them. Jinking (J) spends propellant and moves you off the aim point before the slug arrives.', '#shipPanel'),
@@ -587,9 +591,9 @@
       },
     },
     {
-      n: 7, id: 'harkness', title: 'Harkness', location: 'Jupiter high orbit, 400 000 km', date: '21 June 2211',
+      n: 7, id: 'harkness', title: 'Harkness', location: 'Jupiter orbit, altitude 400 000 km', date: '21 June 2211',
       brief: [
-        'You are in high Jupiter orbit, 400 000 km out, where an Authority squadron has taken station to cut the moons off from each other. Two destroyers, two frigates and two corvettes. Command has given you the task group and the cruiser JCS Harkness to break it with.',
+        'You are in high Jupiter orbit, 400 000 km above the planet, where an Authority squadron has taken station to cut the moons off from each other. Two destroyers, two frigates and two corvettes. Command has given you the task group and the cruiser JCS Harkness to break it with.',
         'Harkness is the Compact\'s only capital ship. Four main lasers behind mirrors 1.6 m across, and 70 cm of armour on the nose. She has not left dock since the Declaration, because the Compact cannot replace her. Losing the traffic between the moons would cost it more. Bring her out, and bring her back.',
       ],
       comms: [say('JCS Harkness', 'Harkness is yours for the day. Her four main lasers burn through armour from farther out than anything they have, so hold that range. Her nose carries 70 cm and her tail carries 12. Do not let a destroyer behind her.')],
@@ -638,15 +642,15 @@
           intro: [say('JCS Harkness', 'Harkness is yours for the day. Her four main lasers burn through armour from farther out than anything they have, so hold that range. Do not let a destroyer behind her.')],
           triggers: [
             hintAt((sim) => sim.time > 45 && !!(E() && E().reach), 'h3', 'The ticks on the line to the target are the burn-through ranges. The teal tick is where Harkness\'s beams burn through the armour they are pointed at. The red tick is where theirs burn through hers. Hold the range between the two and only one side is doing damage.', '#shipPanel'),
-            hintAt({ time: 2 }, 'h1', 'Four ships against six, so do not spread them. Shift-click all four in the list, type 300 in the Range box, and put every beam on the nearest Authority ship until she is out of the fight. Then the next one. Keep Harkness nose-on, because her nose carries 70 cm of armour and her flanks carry 28.', '#fleetList'),
+            hintAt({ time: 2 }, 'h1', (touch() ? 'Four ships against six, so do not spread them. Give all four the same order, one ship at a time: tap the ship, type 300 in the Range box,' : 'Four ships against six, so do not spread them. Shift-click all four in the list, type 300 in the Range box,') + ' and put every beam on the nearest Authority ship until she is out of the fight. Then the next one. Keep Harkness nose-on, because her nose carries 70 cm of armour and her flanks carry 28.', '#fleetList'),
           ],
         };
       },
     },
     {
-      n: 8, id: 'declaration', title: 'Declaration', location: 'Amalthea, Jupiter orbit 181 000 km', date: '9 July 2211',
+      n: 8, id: 'declaration', title: 'Declaration', location: 'Beyond Amalthea\'s orbit, altitude 181 000 km', date: '9 July 2211',
       brief: [
-        'You are at Amalthea, 181 000 km above Jupiter, with Harkness, the destroyers Bastion and Marrow, Anselm and Larkspur. The Authority flagship ISV Concordance is here with everything her squadron has left. A destroyer, two frigates and two Lancers.',
+        'You are 181 000 km above Jupiter, 70 000 km outside Amalthea\'s orbit, with Harkness, the destroyers Bastion and Marrow, Anselm and Larkspur. The Authority flagship ISV Concordance has come out from her anchorage at Amalthea with everything her squadron has left. A destroyer, two frigates and two Lancers.',
         'Her admiral has asked the Compact, formally, to withdraw the Declaration. Callisto answered with the position of this task group. Concordance is a cruiser built on the same lines as Harkness. Same four main lasers, same 70 cm nose, same heat sink. Her beams burn through at the range yours do, and her sink holds as much heat as yours.',
         'Neutralise Concordance. The rest of her squadron is yours to take or leave, and the Compact would like Harkness back in one piece.',
       ],
@@ -663,8 +667,8 @@
         const sim = endSim('Declaration');
         const h = sim && sim.byId('harkness');
         const tail = ' The Declaration will be withdrawn by the autumn.';
-        if (h && h.captured) return 'Harkness was boarded and taken at Amalthea, and the Compact has nothing left to keep the Authority out of Jovian orbit.' + tail;
-        if (h && h.disabled && !h.destroyed) return 'Harkness is adrift at Amalthea at ' + pctOf(h.hull) + ' hull integrity, and the Compact has nothing left to keep the Authority out of Jovian orbit.' + tail;
+        if (h && h.captured) return 'Off Amalthea, Harkness was boarded and taken, and the Compact has nothing left to keep the Authority out of Jovian orbit.' + tail;
+        if (h && h.disabled && !h.destroyed) return 'Harkness is adrift off Amalthea at ' + pctOf(h.hull) + ' hull integrity, and the Compact has nothing left to keep the Authority out of Jovian orbit.' + tail;
         return 'Harkness is gone, and the Compact has nothing left to keep the Authority out of Jovian orbit.' + tail;
       },
       build() {
@@ -692,7 +696,7 @@
           ],
           intro: [say('JCS Harkness', 'If Concordance strikes, the Authority has nothing left out here. Take your time.')],
           triggers: [
-            hintAt({ time: 2 }, 'h1', 'Concordance carries 70 cm of nose armour, and beams from 800 km will not burn through it. Shift-click the whole fleet, type 300 in the Range box, and take her escorts nearest first. Then put every beam on Concordance.', '#fleetList'),
+            hintAt({ time: 2 }, 'h1', (touch() ? 'Concordance carries 70 cm of nose armour, and beams from 800 km will not burn through it. Give every ship the same order, one ship at a time: tap the ship, type 300 in the Range box,' : 'Concordance carries 70 cm of nose armour, and beams from 800 km will not burn through it. Shift-click the whole fleet, type 300 in the Range box,') + ' and take her escorts nearest first. Then put every beam on Concordance.', '#fleetList'),
           ],
         };
       },
@@ -767,7 +771,7 @@
     8: {
       victory: 'Concordance is out of the fight, the Authority\'s ships left for the inner system, and the Declaration stands.',
       defeat: 'Harkness is gone with the task group, and the Compact has nothing left to defend the Declaration with.',
-      adrift: 'Harkness is adrift at Amalthea, and the Compact has nothing left to defend the Declaration with.',
+      adrift: 'Harkness is adrift off Amalthea, and the Compact has nothing left to defend the Declaration with.',
     },
   };
   // warSoFar(n, outcome) -> one sentence, or '' when the chapter or the outcome is unknown.

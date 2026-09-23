@@ -1676,7 +1676,7 @@
       'shoots them down at a fixed rate while they close, so a salvo bigger than what she can stop in that flight ' +
       'time puts the rest of it aboard. A smaller salvo is spent for nothing. Every one you launch is one you do ' +
       'not have in the next fight.',
-    cripple: 'A ship with no drive cannot manoeuvre or run. Board her and the hull and crew are yours. That ' +
+    cripple: 'A ship with no drive cannot manoeuvre or run. Board her, and if the party wins, the hull and crew are yours. That ' +
       'means matching her speed and holding station inside 3 km: 90 s against a crew the size of ours, longer ' +
       'against a bigger one. Finishing her off with full fire is quicker, and it leaves no prize to take home. ' +
       'Boarding holds you still for the whole crossing. That is dangerous while anything else on her side is ' +
@@ -2305,9 +2305,11 @@
     // The band shows another ship's card with her name in the eyebrow, but the title has to stand
     // on its own in a toast, in the log and read aloud: if it does not name her, it says nothing.
     if (d.third && ship && ship.name && base.indexOf(ship.name) < 0) {
-      base = ship.name + ': ' + (/^[A-Z][a-z]/.test(base) ? base.charAt(0).toLowerCase() + base.slice(1) : base);
+      // lower case only for an ordinary sentence ('How do we close'); 'Conamara Station is under fire' keeps its name
+      base = ship.name + ': ' + (/^[A-Z][a-z]*\s+[a-z]/.test(base) ? base.charAt(0).toLowerCase() + base.slice(1) : base);
     }
-    d.title = n > 1 ? base + ' · ' + n + ' ships' : base;
+    // the count follows the words without a full stop between them ('Pick the range · 3 ships')
+    d.title = n > 1 ? base.replace(/\.$/, '') + ' · ' + n + ' ships' : base;
     d.text = say(d._text, d.third);
     d.plain = say(d._text, false); // the first-person sentence the cooldown compares against
   }
@@ -2813,8 +2815,9 @@
         label: 'Coast in at ' + Math.round(T.coastSpeed / 100) / 10 + ' km/s',
         // The opening burn is not free and the card says so: for as long as it lasts the plume is a
         // firing solution for everyone in the engagement, and the quiet only starts when it stops.
-        detail: withNum(maybe(view, time(slow.burn)) + ' of burn, and they hold a solution while it lasts · then dark for ' +
-          maybe(view, time(slow.coast)) + ' · ' + dv(slow.dv, !view.solution) + ' · ' + quiet +
+        // a leg with no coast in it says nothing about going dark ('then dark for 0 s' in chapter 7)
+        detail: withNum(maybe(view, time(slow.burn)) + ' of burn, and they hold a solution while it lasts' +
+          (slow.coast >= 1 ? ' · then dark for ' + maybe(view, time(slow.coast)) : '') + ' · ' + dv(slow.dv, !view.solution) + ' · ' + quiet +
           (plan.fits ? ' · brake at ' + km(brakeAt) + ', alongside at ' + km(hold) : ' · settling at ' + km(standoff)) +
           (outrun ? ' · this coast never closes the range' : ' in ' + maybe(view, time(slow.t))),
           kmSay(view, gap) + ' to cover'),
@@ -3034,9 +3037,11 @@
       text: (sm, sh, third) => {
         const V = voiceOf(sh || ship, third);
         const her = foeWord(V, target);
+        // the flip opens the card, so its first word takes a capital ('she' becomes 'She')
+        const Her = her.charAt(0).toUpperCase() + her.slice(1);
         const flip = !flipped ? ''
-          : exposed ? her + ' is close enough to burn the radiators off now. '
-            : her + ' has broken off, and her beams no longer reach the radiators. ';
+          : exposed ? Her + ' is close enough to burn the radiators off now. '
+            : Her + ' has broken off, and her beams no longer reach the radiators. ';
         return flip + (exposed
           ? (V.third && target && target.name ? target.name + '\u2019s' : 'Her') + ' beams reach ' + V.us + ' at ' + rangeSay(view) +
             ', and the radiators are the thinnest part of the ship.'
@@ -3760,7 +3765,8 @@
     // against a bigger one, so the key prices the crossing this hull would actually make.
     const plan = boardPlan(ship, target);
     const cross = plan.time;
-    const run = p.t != null ? p.t + cross : null;
+    const reach = p.t != null && isFinite(p.t);
+    const run = reach ? p.t + cross : null;
     const inTime = theirs === 0 || (run != null && run <= T.boardWindow);
     const view = trackRange(sim, ship, target);
     // The decks, before the run: too many fit aboard her and the party is thrown back.
@@ -3769,24 +3775,28 @@
       {
         id: 'board',
         label: 'Board her',
-        detail: withNum('alongside in ' + maybe(view, time(p.t)) + ' · hold ' + time(cross) + ' inside ' + km(B.range) + ' at under ' + Math.round(B.speed) +
-          V.say(' m/s and the hull and crew are ours', ' m/s and the hull and crew are ' + V.name + '\u2019s') +
+        // No run the tanks and the drive can fly reads 'cannot get alongside', not 'alongside in never'; and a
+        // party her crew throws back does not take the hull, so that line leaves out the prize.
+        detail: withNum(!reach ? V.say('we cannot get alongside her', V.name + ' cannot get alongside her') :
+          'alongside in ' + maybe(view, time(p.t)) +
+          ' · hold ' + time(cross) + ' inside ' + km(B.range) + ' at under ' + Math.round(B.speed) + ' m/s' +
           (decks && decks.beaten
             ? ' · her ' + decks.theirs + ' fit crew against ' + V.say('our ', V.name + '\u2019s ') + decks.ours +
-              ' throws the party back'
-            : swarmed ? ' · ' + count(theirs) + ' of hers ' + (theirs === 1 ? 'is' : 'are') + ' still shooting against ' +
+              ' throw the party back'
+            : V.say(' and the hull and crew are ours', ' and the hull and crew are ' + V.name + '\u2019s') +
+            (swarmed ? ' · ' + count(theirs) + ' of hers ' + (theirs === 1 ? 'is' : 'are') + ' still shooting against ' +
               (ours === 0
                 ? V.say('nothing of ours, and we sit still for all of it',
                   'nothing of ' + V.name + '\u2019s, and she sits still for all of it')
                 : count(ours) + V.say(' of ours, and we sit still for all of it',
                   ' of ' + V.name + '\u2019s, and she sits still for all of it'))
-              : !inTime ? ' · ' + maybe(view, time(run)) + ' of it with ' + count(theirs) + ' of hers still shooting' : ''),
+              : !inTime && reach ? ' · ' + maybe(view, time(run)) + ' of it with ' + count(theirs) + ' of hers still shooting' : '')),
           rangeSay(view) + ' to her'),
-        noRec: swarmed || !inTime || !!(decks && decks.beaten),
+        noRec: swarmed || !inTime || !reach || !!(decks && decks.beaten),
         // The decks decide it, so this key does not do what it says: never lit, and never the
         // routine's answer either.
         never: !!(decks && decks.beaten),
-        recommended: !swarmed && inTime && !(decks && decks.beaten),
+        recommended: !swarmed && inTime && reach && !(decks && decks.beaten),
         burns: true,
         act: (s) => {
           s.setTarget(ship.id, target.id);
@@ -3919,6 +3929,11 @@
             : 'Slugs inbound, ' + Math.round(cur.eta) + ' s.';
         }
         const at = from ? km(U.dist((sh || ship).pos, from.pos)) : '';
+        // the card stays up long enough to be read after its moment passes: once we are out of her
+        // reach it says so, rather than 'inside her coilgun' beside a reach of 0 m
+        if (from && !slugGunOn(sm, sh || ship, from)) {
+          return third ? who + ' is outside ' + from.name + '\u2019s coilgun now.' : 'Outside ' + from.name + '\u2019s coilgun now.';
+        }
         return third
           ? who + ' is inside ' + (from ? from.name + '\u2019s' : 'her') + ' coilgun at ' + at + '. Have her jink?'
           : 'Inside ' + (from ? from.name + '\u2019s' : 'her') + ' coilgun at ' + at + '.';
@@ -3934,6 +3949,10 @@
         }
         const reach = from ? slugGunOn(sm, me, from) : 0;
         const nom = third && me.name ? me.name + ' is' : 'we are';
+        if (!reach) {
+          return (cur.was > 0 ? (from ? from.name : 'She') + ' has thrown ' + count(cur.was) + (cur.was === 1 ? ' round' : ' rounds') +
+            ' at ' + subject + ' already. ' : '') + (third && me.name ? me.name + ' is' : 'We are') + ' outside her coilgun now.';
+        }
         const gun = (from ? from.name : 'She') + '\u2019s coilgun reaches ' + km(reach) + ' and ' + nom + ' inside it';
         return (cur.was > 0
           ? (from ? from.name : 'She') + ' has thrown ' + count(cur.was) + (cur.was === 1 ? ' round' : ' rounds') +
@@ -5527,7 +5546,7 @@
       list.push({
         id: 'keep',
         label: 'Keep the burn',
-        detail: staysWords(part, ship, true) +
+        detail: staysWords(part, ship, false) +
           ' · ' + V.say('we hold the order we are flying', V.name + ' holds the order she is flying'),
         recommended: pressing || !c.worth,
         quiet: true,
@@ -5550,7 +5569,7 @@
     list.push({
       id: 'keep',
       label: 'Keep them out',
-      detail: staysWords(part, ship, true) +
+      detail: staysWords(part, ship, false) +
         ' · the radiators stay out and the sink holds at ' + pct(loadOf(ship)),
       recommended: pressing || !c.worth,
       quiet: true,
@@ -5616,7 +5635,7 @@
     list.push({
       id: 'keep',
       label: 'Keep the parties where they are',
-      detail: staysWords(part, ship, true) + ' · ' + (list.length > 1
+      detail: staysWords(part, ship, false) + ' · ' + (list.length > 1
         ? 'both watches stay at ' + pct(1)
         : (STATION_WORD[c.pick ? c.pick.task : ''] || 'the watch') + ' stays at ' + pct(1)),
       recommended: !c.worth,
@@ -5910,7 +5929,7 @@
       // The order stands, so the party cannot start: she comes off the part and back on watch
       // rather than standing by a drive that will be lit for the rest of the run. The key says so,
       // because the watch coming back is what the answer buys.
-      detail: staysWords(w.row || { name: w.name, id: w.id, hp: 0 }, ship, true) + ' · ' +
+      detail: staysWords(w.row || { name: w.name, id: w.id, hp: 0 }, ship, false) + ' · ' +
         partyLower(w.party) + ' comes off ' + partPhrase(w.name, w.id, ship) +
         (arriveWords(p.rHigh) ? ' · ' + arriveWords(p.rHigh) : ''),
       recommended: !cut,

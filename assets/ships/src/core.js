@@ -2092,16 +2092,49 @@
     return { w: s.w * up, h: s.h * up, ox: s.ox * up, oy: s.oy * up };
   }
 
+  // A family's stages settle some parts where the drawing puts them (the Kestrel moves its radiator wings into the
+  // gaps between its tanks), so a label reads the layout as it stands after a build, not the one before it. One
+  // build per design, kept.
+  const settled = new Map();
+  function settledLayout(D, design, opts) {
+    let key = null;
+    try { key = designKey(design); } catch (e) { key = null; }
+    if (key != null && settled.has(key)) return settled.get(key);
+    let lay = null;
+    const st = normState(opts.state);
+    const bctx = { L: D.length, state: st, faction: opts.faction || D.faction, facColor: factionColor(opts.faction || D.faction), seg: lodSegments(opts.size, opts.quality), view: opts.view, D };
+    const was = BUILD;
+    BUILD = { st, parts: st.parts || null, radCount: 0, tankCount: 0, lay: null };
+    try { buildDesign(D, bctx); lay = bctx.layout || null; } catch (e) { lay = null; } finally { BUILD = was; }
+    if (!lay) return layoutFor(D);
+    if (key != null) { if (settled.size > 48) settled.clear(); settled.set(key, lay); }
+    return lay;
+  }
   function callouts(design, opts) {
     const D = normDesign(design);
     opts = Object.assign({ size: 200, view: 'threequarter', rotation: 0 }, opts || {});
-    const lay = layoutFor(D);
+    const lay = settledLayout(D, design, opts);
     const list = D._fam.callouts ? D._fam.callouts(lay, defaultCallouts(lay)) : defaultCallouts(lay);
     const cam = camera(opts.view), scale = opts.size / D.length;
     const cr = Math.cos(opts.rotation || 0), sr = Math.sin(opts.rotation || 0);
+    // The families pin the radiator label on the first panel. In a turned view that panel can be the one behind
+    // the hull, so the label moves to the same spot on whichever panel is nearest the camera.
+    const rads = lay.rads || [];
+    const nearest = (c) => {
+      if (c.label !== 'Radiators' || rads.length < 2 || !rads[0].dir) return c.at;
+      const d0 = rads[0].dir, o = V.sub(c.at, rads[0].at), s = V.dot(o, d0), rest = V.sub(o, V.scale(d0, s));
+      let best = c.at, bd = V.dot(c.at, cam.D);
+      for (let i = 1; i < rads.length; i++) {
+        if (!rads[i].dir) continue;
+        const p = V.add(V.add(rads[i].at, V.scale(rads[i].dir, s)), rest), d = V.dot(p, cam.D);
+        if (d > bd + 1e-9) { bd = d; best = p; }
+      }
+      return best;
+    };
     return list.map((c) => {
-      const x = V.dot(c.at, cam.R) * scale, y = -V.dot(c.at, cam.U) * scale;
-      return { label: c.label, text: c.text, x: x * cr - y * sr, y: x * sr + y * cr, depth: V.dot(c.at, cam.D) * scale, facing: c.facing };
+      const at = nearest(c);
+      const x = V.dot(at, cam.R) * scale, y = -V.dot(at, cam.U) * scale;
+      return { label: c.label, text: c.text, x: x * cr - y * sr, y: x * sr + y * cr, depth: V.dot(at, cam.D) * scale, facing: c.facing };
     });
   }
 
